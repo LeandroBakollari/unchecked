@@ -1,211 +1,140 @@
-import pygame
 import math
 import random
+import pygame
 from game.attacks.base import AttackBase
+from game import utils
 
 
 class SwordAttack(AttackBase):
     """
-    Sprite-based sword attack.
-    - 5 total slashes spawned at init:
-        * 2 slashes locked to player center (angles -45, +45) — they follow player each frame
-        * 3 slashes at random positions across the player's movement area (random angles)
-    - Timing (frames @60fps) shortened by 0.5s:
-        wait:  30  (0.0 - 0.5s)
-        preview: 120 (0.5 - 2.0s)
-        slash active: 120-210 (2.0 - 3.5s)  -> present for 1.5s
-        finish: 270 (4.5s total)
-    - Images are pre-scaled & rotated once at spawn to avoid per-frame transforms.
+    Sword attack:
+    - 3 loose slashes near the player's position at spawn + 1 cross slash at the player's spot.
+    - Sword appears at the draw spot for 2s, hops slightly downward, vanishes, then previews begin.
+    - Red pulsing preview lines for ~2.5s, then the sword stabs along the line and disappears.
     """
 
     def __init__(self, pen_rect, player_rect, assets, damage=15):
         super().__init__(pen_rect, player_rect, assets)
-
-        # assets you provide
-        self.sword_img = assets["sword_img"]   # small center/hilt image
-        self.slash_img = assets["slash_img"]   # vertical image (2:7 ratio)
-
+        self.sword_img = assets["sword_img"]
         self.damage = damage
-        self.origin = pen_rect.center
 
-        # TIMING (reduced by 0.5s)
-        self.wait_time = 30        # 0.0 - 0.5s
-        self.preview_time = 120    # 0.5 - 2.0s
-        self.slash_start = 120     # 2.0s
-        self.slash_end = 210       # 3.5s
-        self.finish_time = 270     # 4.5s
-        self.timer = 0
-        self.finished = False
+        self.idle_time = 1.3
+        self.idle_hop = 12
+        self.preview_time = 1.7
+        self.strike_time = 0.25
 
-        # how big to draw slashes relative to original image:
-        # we increase scale to make slashes longer, but not huge (keeps perf)
-        self.SLASH_SCALE = 1.1
+        self.slash_length = 360
+        self.preview_thickness = 10
+        self.slash_half_width = self.preview_thickness * 0.5
+        self.global_timer = 0.0
+        self.sword_visible = True
+        self.sword_origin = pygame.Vector2(pen_rect.center)
+        self.hopped = False
 
-        # how far random slashes may appear from screen edges (padding)
-        self.RANDOM_AREA_PADDING = 40
-
-        # number of slashes by type:
-        self.TOTAL = 5
-        self.FOLLOW_COUNT = 2   # these lock to player
-        self.RANDOM_COUNT = 3
-
-        # storage for slashes
-        # each entry: { x,y, angle_deg, surf_preview, surf_real, is_follow, hit }
         self.slashes = []
+        self._spawn_slashes(player_rect)
 
-        # spawn all 5 (two follow + three random)
-        self.spawn_slashes(player_rect)
+    def _make_slash(self, center_pos, angle_deg, preview_offset=0.0):
+        # define start/end in local coords centered at center_pos
+        half_len = self.slash_length * 0.5
+        dir_vec = pygame.Vector2(math.cos(math.radians(angle_deg)), math.sin(math.radians(angle_deg)))
+        start = pygame.Vector2(center_pos) - dir_vec * half_len
+        end = pygame.Vector2(center_pos) + dir_vec * half_len
+        return {
+            "center": pygame.Vector2(center_pos),
+            "start": start,
+            "end": end,
+            "angle": angle_deg,
+            "timer": 0.0,
+            "hit": False,
+            "preview_offset": preview_offset,
+            "sword_pos": None,
+        }
 
+    def _spawn_slashes(self, player_rect):
+        center = pygame.Vector2(player_rect.center)
+        radius = 150
 
-    # --------------------------
-    # SPAWN LOGIC
-    # --------------------------
-    def spawn_slashes(self, player_rect):
-        px, py = player_rect.center
+        for _ in range(2):
+            offset_dir = pygame.Vector2(random.uniform(50, radius), 0).rotate(random.uniform(0, 360))
+            pos = center + offset_dir
+            angle = random.uniform(-130, 130)
+            jitter = random.uniform(-0.1, 0.1)
+            self.slashes.append(self._make_slash(pos, angle, jitter))
 
-        # prepare scaled base
-        base_w = int(self.slash_img.get_width() * self.SLASH_SCALE)
-        base_h = int(self.slash_img.get_height() * self.SLASH_SCALE)
-        base_surf = pygame.transform.smoothscale(self.slash_img, (base_w, base_h))
+        for angle in (45, -45):
+            self.slashes.append(self._make_slash(center, angle, 0.0))
 
-        # --- TWO that FOLLOW the player (angles -45 and +45) ---
-        for angle in (-45, 45):
-            # initially at player center; will be updated each frame
-            surf_real = pygame.transform.rotate(base_surf, -angle)
-            surf_preview = surf_real.copy()
-            surf_preview.set_alpha(140)  # preview alpha
-            self.slashes.append({
-                "x": px, "y": py,
-                "angle": angle,
-                "surf_real": surf_real,
-                "surf_preview": surf_preview,
-                "is_follow": True,
-                "hit": False
-            })
-
-        # --- determine random placement area ---
-        # try to use the actual screen surface (preferred)
-        try:
-            screen = pygame.display.get_surface()
-            sw, sh = screen.get_width(), screen.get_height()
-            area_left = self.RANDOM_AREA_PADDING
-            area_top = self.RANDOM_AREA_PADDING
-            area_right = sw - self.RANDOM_AREA_PADDING
-            area_bottom = sh - self.RANDOM_AREA_PADDING
-        except Exception:
-            # fallback: use a rectangle around the player (big)
-            area_left = px - 400
-            area_top = py - 300
-            area_right = px + 400
-            area_bottom = py + 300
-
-        # --- THREE random slashes anywhere in that area ---
-        for _ in range(self.RANDOM_COUNT):
-            rx = random.randint(int(area_left), int(area_right))
-            ry = random.randint(int(area_top), int(area_bottom))
-            ang = random.uniform(0, 360)
-            surf_real = pygame.transform.rotate(base_surf, -ang)
-            surf_preview = surf_real.copy()
-            surf_preview.set_alpha(140)
-            self.slashes.append({
-                "x": rx, "y": ry,
-                "angle": ang,
-                "surf_real": surf_real,
-                "surf_preview": surf_preview,
-                "is_follow": False,
-                "hit": False
-            })
-
-
-    # --------------------------
-    # UPDATE (called every frame)
-    # --------------------------
-    def update(self, projectiles, player):
+    def update(self, dt, projectiles, player):
         if self.finished:
-            return
+            return []
 
-        self.timer += 1
+        self.global_timer += dt
 
-        # update follow slashes to player's current center so they always hit you directly
-        px, py = player.get_rect().center
-        for s in self.slashes:
-            if s["is_follow"]:
-                s["x"], s["y"] = px, py
+        # hide sword after idle and hop slightly down
+        if self.sword_visible and self.global_timer >= self.idle_time:
+            if not self.hopped:
+                self.sword_origin.y += self.idle_hop
+                self.hopped = True
+            self.sword_visible = False
 
-        # apply damage when the slashes first spawn (at slash_start)
-        if self.timer == self.slash_start:
-            self.apply_damage(player)
+        if self.global_timer < self.idle_time:
+            return []
 
-        if self.timer >= self.finish_time:
+        for slash in self.slashes:
+            slash["timer"] += dt
+            t = slash["timer"] - slash["preview_offset"]
+
+            # strike moment
+            if self.preview_time <= t < self.preview_time + self.strike_time and not slash["hit"]:
+                center = slash["center"]
+                ang = slash["angle"]
+                if utils.swing_hits_rect(center, ang, self.slash_length, self.slash_half_width, player.get_hitbox()):
+                    player.take_damage(self.damage)
+                slash["hit"] = True
+
+            # sword position during strike
+            if self.preview_time <= t < self.preview_time + self.strike_time:
+                prog = (t - self.preview_time) / self.strike_time
+                sword_point = slash["start"].lerp(slash["end"], 0.4 + 0.6 * prog)
+                slash["sword_pos"] = sword_point
+            elif t >= self.preview_time + self.strike_time:
+                if slash["sword_pos"] is None:
+                    slash["sword_pos"] = slash["end"]
+                if not slash["hit"]:
+                    slash["hit"] = True
+
+        if all(s["timer"] >= s["preview_offset"] + self.preview_time + self.strike_time for s in self.slashes):
             self.finished = True
 
+        return []
 
-    # --------------------------
-    # DAMAGE: very simple, checks distance to line center
-    # We check a small width around the slash centerline.
-    # --------------------------
-    def apply_damage(self, player):
-        # player center
-        px, py = player.get_rect().center
-
-        # width threshold (how "thick" the slash hits)
-        width_threshold = 18
-
-        for s in self.slashes:
-            if s["hit"]:
-                continue
-
-            # compute perpendicular distance from player to slash line:
-            # treat slash as infinite line through (x,y) with orientation angle theta
-            sx, sy = s["x"], s["y"]
-            theta = math.radians(s["angle"])
-
-            # vector from slash center to player
-            vx = px - sx
-            vy = py - sy
-
-            # perpendicular distance = |vx * sin(theta) - vy * cos(theta)|
-            perp = abs(vx * math.sin(theta) - vy * math.cos(theta))
-
-            if perp <= width_threshold:
-                # in range -> apply damage once
-                try:
-                    player.take_damage(self.damage)
-                except Exception:
-                    # safe fallback if player's API differs
-                    if hasattr(player, "hp"):
-                        player.hp -= self.damage
-                s["hit"] = True
-            else:
-                s["hit"] = True  # mark as checked so we don't recheck
-
-
-    # --------------------------
-    # DRAW
-    # --------------------------
-    def draw(self, surf):
+    def draw(self, surface):
         if self.finished:
             return
 
-        # draw sword base/hilt
-        base_rect = self.sword_img.get_rect(center=self.origin)
-        surf.blit(self.sword_img, base_rect)
+        if self.sword_visible:
+            origin_rect = self.sword_img.get_rect(center=self.sword_origin)
+            surface.blit(self.sword_img, origin_rect)
 
-        # PREVIEW PHASE (semi-transparent)
-        if self.wait_time <= self.timer < self.preview_time:
-            # interpolation alpha for nicer fade-in
-            t = (self.timer - self.wait_time) / max(1, (self.preview_time - self.wait_time))
-            alpha = int(110 + 120 * t)  # from ~110 -> ~230
-            for s in self.slashes:
-                img = s["surf_preview"]
-                # we use a copy so we don't permanently change alpha
-                img_to_draw = img.copy()
-                img_to_draw.set_alpha(alpha)
-                rect = img_to_draw.get_rect(center=(int(s["x"]), int(s["y"])))
-                surf.blit(img_to_draw, rect)
+        for slash in self.slashes:
+            t = slash["timer"] - slash["preview_offset"]
 
-        # REAL SLASH PHASE (full opacity)
-        if self.slash_start <= self.timer < self.slash_end:
-            for s in self.slashes:
-                rect = s["surf_real"].get_rect(center=(int(s["x"]), int(s["y"])))
-                surf.blit(s["surf_real"], rect)
+            # preview line pulse
+            if t < self.preview_time and not self.sword_visible:
+                alpha = int(130 + 90 * (0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.008)))
+                start = slash["start"]
+                end = slash["end"]
+                pygame.draw.line(surface, (220, 40, 40, alpha), start, end, int(self.preview_thickness))
+                pygame.draw.line(surface, (255, 90, 90, alpha), start, end, max(2, int(self.preview_thickness * 0.45)))
+
+            # sword during strike only
+            if self.preview_time <= t < self.preview_time + self.strike_time:
+                pos = slash["sword_pos"]
+                if pos is None:
+                    continue
+                angle = -slash["angle"]
+                img = pygame.transform.rotate(self.sword_img, angle)
+                render_pos = pygame.Vector2(pos)
+                rect = img.get_rect(center=(int(render_pos.x), int(render_pos.y)))
+                surface.blit(img, rect)
