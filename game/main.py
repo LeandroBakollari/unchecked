@@ -14,11 +14,12 @@ from game.utils import (
 from game.attacks.gun import GunAttack
 from game.attacks.grenade import GrenadeAttack
 from game.attacks.sword import SwordAttack
+from game.attacks.staff import StaffAttack
 
 pygame.init()
 
 # --- ATTACK REGISTRY ---
-ATTACK_TYPES = [GunAttack, GrenadeAttack, SwordAttack]
+ATTACK_TYPES = [GunAttack, GrenadeAttack, SwordAttack, StaffAttack]
 
 # --- DISPLAY SETUP ---
 screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
@@ -46,6 +47,7 @@ AttackAssets = {
     "grenade_img": grenade_img,
     "explosion_img": explosion_img,
     "sword_img": sword_img,
+    "slash_img": slash_img,
 }
 
 # --- ENTITIES ---
