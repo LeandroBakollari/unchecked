@@ -12,7 +12,8 @@ An endless dodge game on notebook paper. You play the small checkbox; an evil pe
 - Gun: plants a gun at the pencil location and fires 3 shots toward the player, one burst at a time with recoil.
 - Grenade: lobs a spinning grenade toward where the player stood when it was drawn; a pulsing circle marks the blast before it detonates.
 - Sword: shows red pulsing preview lines, then a sword leaps in and stabs along each slash; the sword stays stuck briefly (shakes before vanishing).
-- Staff: aims a cone toward the play area center and fires two staggered waves of fireballs across that arc.
+- Shotgun: aims a cone toward the play area center and fires two staggered waves of fireballs across that arc.
+- Mirror: a slow mirror pen that spawns three random attacks in sequence.
 
 Add new attacks by appending another bullet to this list that briefly states the telegraph, movement, and hit logic.
 

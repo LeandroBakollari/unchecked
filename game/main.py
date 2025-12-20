@@ -11,15 +11,14 @@ from game.utils import (
     draw_paper_background,
 )
 
+from game.attacks.base import AttackBase
 from game.attacks.gun import GunAttack
 from game.attacks.grenade import GrenadeAttack
 from game.attacks.sword import SwordAttack
-from game.attacks.staff import StaffAttack
+from game.attacks.shotgun import ShotgunAttack
+from game.attacks.mirror import MirrorAttack
 
 pygame.init()
-
-# --- ATTACK REGISTRY ---
-ATTACK_TYPES = [GunAttack, GrenadeAttack, SwordAttack, StaffAttack]
 
 # --- DISPLAY SETUP ---
 screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
@@ -47,8 +46,13 @@ AttackAssets = {
     "grenade_img": grenade_img,
     "explosion_img": explosion_img,
     "sword_img": sword_img,
-    "slash_img": slash_img,
+    "shotgun_img": slash_img,
 }
+
+# --- ATTACK REGISTRY ---
+ATTACK_TYPES = [GunAttack, GrenadeAttack, SwordAttack, ShotgunAttack, MirrorAttack]
+# mirror should only spawn non-mirror attacks
+AttackAssets["attack_classes"] = [GunAttack, GrenadeAttack, SwordAttack, ShotgunAttack]
 
 # --- ENTITIES ---
 player = Player(checkbox_icon, screen_width, screen_height)
@@ -112,7 +116,11 @@ while running:
         for attack in active_attacks[:]:
             spawned = attack.update(dt, projectiles, player) or []
             if spawned:
-                projectiles.extend(spawned)
+                for obj in spawned:
+                    if isinstance(obj, AttackBase):
+                        active_attacks.append(obj)
+                    else:
+                        projectiles.append(obj)
             if attack.finished:
                 active_attacks.remove(attack)
 
