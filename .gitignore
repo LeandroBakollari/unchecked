@@ -1,0 +1,22 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Local run data
+game/scores.json
+scores.json
+
+# Virtual envs
+.venv/
+venv/
+
+# Build outputs
+build/
+dist/
+portable/
+release/
+*.spec.bak
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

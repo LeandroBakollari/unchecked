@@ -1,5 +1,7 @@
 import json
+import os
 import random
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -38,30 +40,50 @@ fullscreen = True
 
 screen_width, screen_height, area_rect, top_area = recalc_geometry(screen)
 
-ASSET_PATH = "game/assets/images/"
-SCORES_PATH = Path("game/scores.json")
 
-checkbox_icon = load_scaled(ASSET_PATH + "Checkbox.png", (26, 26))
-checkbox_icon_1 = load_scaled(ASSET_PATH + "Checkbox1.png", (26, 26))
-checkbox_icon_2 = load_scaled(ASSET_PATH + "Checkbox2.png", (26, 26))
-checkbox_icon_3 = load_scaled(ASSET_PATH + "Checkbox3.png", (26, 26))
-pen_img = load_scaled(ASSET_PATH + "pen.png", (130, 130))
-gun_img = load_scaled(ASSET_PATH + "gun.png", (110, 110))
-bullet_img = load_scaled(ASSET_PATH + "bullet.png", (20, 20))
-grenade_img = load_scaled(ASSET_PATH + "grenade.png", (42, 42))
-explosion_img = load_scaled(ASSET_PATH + "explosion.png", (160, 160))
-sword_img = load_scaled(ASSET_PATH + "sword.png", (80, 80))
-slash_img = load_scaled(ASSET_PATH + "slash.png", (200, 30))
-shotgun_img = load_scaled(ASSET_PATH + "shotgun.png", (150, 90))
-mirror_img = load_scaled(ASSET_PATH + "mirror.png", (110, 110))
-sniper_img = load_scaled(ASSET_PATH + "sniper.png", (150, 85))
-boomerang_img = load_scaled(ASSET_PATH + "boomerang.png", (95, 95))
-shuriken_img = load_scaled(ASSET_PATH + "shuriken.png", (78, 78))
-shuriken_projectile_img = load_scaled(ASSET_PATH + "shuriken.png", (62, 62))
-stuff_img = load_scaled(ASSET_PATH + "stuff.png", (120, 120))
-fireball_img = load_scaled(ASSET_PATH + "fireball.png", (54, 54))
-audio_icon = load_scaled(ASSET_PATH + "audio.png", (56, 56))
-settings_icon = load_scaled(ASSET_PATH + "settings.png", (56, 56))
+def get_base_path():
+    """Resolve the correct base path for source runs and bundled executable runs."""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS)
+    return Path(__file__).resolve().parent.parent
+
+
+def get_scores_path():
+    """Store scores in the user's local app-data folder instead of inside the project tree."""
+    local_root = os.getenv("LOCALAPPDATA")
+    if local_root:
+        data_dir = Path(local_root) / "Unchecked"
+    else:
+        data_dir = Path.home() / ".unchecked"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    return data_dir / "scores.json"
+
+
+BASE_PATH = get_base_path()
+ASSET_PATH = BASE_PATH / "game" / "assets" / "images"
+SCORES_PATH = get_scores_path()
+
+checkbox_icon = load_scaled(str(ASSET_PATH / "Checkbox.png"), (26, 26))
+checkbox_icon_1 = load_scaled(str(ASSET_PATH / "Checkbox1.png"), (26, 26))
+checkbox_icon_2 = load_scaled(str(ASSET_PATH / "Checkbox2.png"), (26, 26))
+checkbox_icon_3 = load_scaled(str(ASSET_PATH / "Checkbox3.png"), (26, 26))
+pen_img = load_scaled(str(ASSET_PATH / "pen.png"), (130, 130))
+gun_img = load_scaled(str(ASSET_PATH / "gun.png"), (110, 110))
+bullet_img = load_scaled(str(ASSET_PATH / "bullet.png"), (20, 20))
+grenade_img = load_scaled(str(ASSET_PATH / "grenade.png"), (42, 42))
+explosion_img = load_scaled(str(ASSET_PATH / "explosion.png"), (160, 160))
+sword_img = load_scaled(str(ASSET_PATH / "sword.png"), (80, 80))
+slash_img = load_scaled(str(ASSET_PATH / "slash.png"), (200, 30))
+shotgun_img = load_scaled(str(ASSET_PATH / "shotgun.png"), (150, 90))
+mirror_img = load_scaled(str(ASSET_PATH / "mirror.png"), (110, 110))
+sniper_img = load_scaled(str(ASSET_PATH / "sniper.png"), (150, 85))
+boomerang_img = load_scaled(str(ASSET_PATH / "boomerang.png"), (95, 95))
+shuriken_img = load_scaled(str(ASSET_PATH / "shuriken.png"), (78, 78))
+shuriken_projectile_img = load_scaled(str(ASSET_PATH / "shuriken.png"), (62, 62))
+stuff_img = load_scaled(str(ASSET_PATH / "stuff.png"), (120, 120))
+fireball_img = load_scaled(str(ASSET_PATH / "fireball.png"), (54, 54))
+audio_icon = load_scaled(str(ASSET_PATH / "audio.png"), (56, 56))
+settings_icon = load_scaled(str(ASSET_PATH / "settings.png"), (56, 56))
 
 AttackAssets = {
     "gun_img": gun_img,
