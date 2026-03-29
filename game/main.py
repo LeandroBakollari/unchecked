@@ -20,6 +20,7 @@ from game.attacks.mirror import MirrorAttack
 from game.attacks.sniper import SniperAttack
 from game.attacks.boomerang import BoomerangAttack
 from game.attacks.shuriken import ShurikenAttack
+from game.attacks.stuff import StuffAttack
 
 pygame.init()
 
@@ -48,6 +49,8 @@ sniper_img = load_scaled(ASSET_PATH + "sniper.png", (150, 85))
 boomerang_img = load_scaled(ASSET_PATH + "boomerang.png", (95, 95))
 shuriken_img = load_scaled(ASSET_PATH + "shuriken.png", (78, 78))
 shuriken_projectile_img = load_scaled(ASSET_PATH + "shuriken.png", (62, 62))
+stuff_img = load_scaled(ASSET_PATH + "stuff.png", (120, 120))
+fireball_img = load_scaled(ASSET_PATH + "fireball.png", (54, 54))
 
 AttackAssets = {
     "gun_img": gun_img,
@@ -62,12 +65,14 @@ AttackAssets = {
     "boomerang_img": boomerang_img,
     "shuriken_img": shuriken_img,
     "shuriken_projectile_img": shuriken_projectile_img,
+    "stuff_img": stuff_img,
+    "fireball_img": fireball_img,
 }
 
 # --- ATTACK REGISTRY ---
-ATTACK_TYPES = [GunAttack, GrenadeAttack, SwordAttack, ShotgunAttack, MirrorAttack, SniperAttack, BoomerangAttack, ShurikenAttack]
+ATTACK_TYPES = [GunAttack, GrenadeAttack, SwordAttack, ShotgunAttack, MirrorAttack, SniperAttack, BoomerangAttack, ShurikenAttack, StuffAttack]
 # mirror should only spawn non-mirror attacks
-AttackAssets["attack_classes"] = [GunAttack, GrenadeAttack, SwordAttack, ShotgunAttack, SniperAttack, BoomerangAttack, ShurikenAttack]
+AttackAssets["attack_classes"] = [GunAttack, GrenadeAttack, SwordAttack, ShotgunAttack, SniperAttack, BoomerangAttack, ShurikenAttack, StuffAttack]
 
 # --- ENTITIES ---
 player = Player(checkbox_icon, screen_width, screen_height)
