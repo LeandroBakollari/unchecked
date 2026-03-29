@@ -1,32 +1,76 @@
 # Unchecked
 
-An endless dodge game on notebook paper. You play the small checkbox; an evil pencil hops around its drawing lane and sketches attacks that land in the dodge zone a heartbeat later.
+Unchecked is a notebook-paper survival dodge game. You control the checkbox while a hostile pencil sketches attacks from the top lane into the play area.
+
+## Repository layout
+```text
+.
+|-- game/                   # Game code and shipped assets
+|-- packaging/pyinstaller/  # PyInstaller build spec
+|-- scripts/                # Windows launcher and packaging helpers
+|-- build/                  # Local build output (generated)
+|-- dist/                   # Packaged executable output (generated)
+`-- portable/               # Portable zip output (generated)
+```
+
+The game source stays entirely under `game/`. Build artifacts are kept out of the code layout and are already ignored by Git.
+
+## Run the game
+
+### Option 1: run the packaged build
+If `dist/Unchecked/Unchecked.exe` exists, start it with:
+
+```bat
+scripts\run.bat
+```
+
+### Option 2: run from Python
+From the repository root:
+
+```bat
+py -m game.main
+```
+
+If `scripts\run.bat` does not find a packaged executable, it falls back to a local Python 3.11 install under `%LocalAppData%\Programs\Python\Python311\`.
+
+## Build a Windows package
+Build with PyInstaller from the repository root:
+
+```bat
+py -m PyInstaller packaging\pyinstaller\Unchecked.spec
+```
+
+After the executable is built, create the portable zip with:
+
+```bat
+scripts\package_portable.bat
+```
 
 ## How it plays
-- Move with WASD or arrow keys. Stay inside the sketched dodge zone.
-- The pencil picks a random spot in its top lane, waits ~0.5s as a telegraph, then the chosen attack fires from that spot. The pencil immediately wanders elsewhere and can stack multiple active attacks.
-- Attacks never chase the pencil; they stay where they were drawn. The pencil accelerates over time, which increases how many overlapping attacks you see.
-- Lose all HP and the run ends. Press `R` after dying to restart.
+- Move with `WASD` or the arrow keys.
+- Stay inside the sketched dodge zone.
+- The pencil telegraphs an attack, then fires from the spot where it drew it.
+- Attacks remain where they were drawn while the pencil keeps moving.
+- Lose all HP and the run ends. Press `R` to restart.
 
 ## Current attacks
-- Gun: plants a gun at the pencil location and fires 3 shots toward the player, one burst at a time with recoil.
-- Grenade: lobs a spinning grenade toward where the player stood when it was drawn; a pulsing circle marks the blast before it detonates.
-- Sword: shows red pulsing preview lines, then a sword leaps in and stabs along each slash; the sword stays stuck briefly (shakes before vanishing).
-- Shotgun: aims a cone toward the play area center and fires two staggered waves of fireballs across that arc.
-- Mirror: a slow mirror pen that spawns three random attacks in sequence.
-
-Add new attacks by appending another bullet to this list that briefly states the telegraph, movement, and hit logic.
+- Gun: places a gun at the pencil location and fires a three-shot burst toward the player.
+- Grenade: arcs toward the player's recorded position and detonates after a warning pulse.
+- Sword: previews slash lines, then lunges along them and briefly stays embedded.
+- Shotgun: fires staggered spreads of fireballs across a cone.
+- Mirror: triggers three random attacks in sequence.
 
 ## Code map
-- `game/main.py` — game loop, HUD, paper-themed rendering.
-- `game/utils.py` — geometry helpers (`vector_to`, `normalized`, `angle_from_vector`, `point_from_angle`, `swing_hits_rect`), UI helpers, and layout calculation.
-- `game/player.py` — player movement, HP handling.
-- `game/pen.py` — pencil roaming logic and draw timing.
-- `game/attacks/` — attack implementations; inherit `AttackBase`.
-- `game/projectiles/` — reusable projectile base + bullet.
+- `game/main.py`: main loop, rendering, HUD, and attack registration.
+- `game/player.py`: player movement and health.
+- `game/pen.py`: pencil movement and attack timing.
+- `game/utils.py`: shared geometry, UI helpers, and layout logic.
+- `game/attacks/`: attack implementations built on `AttackBase`.
+- `game/projectiles/`: projectile primitives and reusable projectile types.
 
-### Adding an attack
-1. Create a class that subclasses `AttackBase` in `game/attacks/`.
-2. Use helpers from `utils` (for aiming, line hits, or paper UI) instead of re-deriving math.
-3. Implement `update(dt, projectiles, player)` (spawn projectiles or call `player.take_damage`) and `draw(surface)`.
-4. Register the class in `ATTACK_TYPES` inside `game/main.py` and add a bullet to the list above.
+## Adding an attack
+1. Create a new subclass of `AttackBase` under `game/attacks/`.
+2. Reuse helpers from `game/utils.py` instead of duplicating math.
+3. Implement `update(dt, projectiles, player)` and `draw(surface)`.
+4. Register the attack in `ATTACK_TYPES` in `game/main.py`.
+5. Document the new attack in the list above.

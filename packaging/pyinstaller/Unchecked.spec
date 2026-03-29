@@ -3,7 +3,7 @@
 from pathlib import Path
 
 
-project_root = Path(SPECPATH)
+project_root = Path(SPECPATH).resolve().parents[1]
 game_dir = project_root / "game"
 assets_dir = game_dir / "assets"
 

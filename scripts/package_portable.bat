@@ -1,6 +1,6 @@
 @echo off
 setlocal
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 if not exist ".\dist\Unchecked\Unchecked.exe" (
     echo Missing .\dist\Unchecked\Unchecked.exe
@@ -12,7 +12,7 @@ if not exist ".\dist\Unchecked\Unchecked.exe" (
 if exist ".\portable" rmdir /s /q ".\portable"
 mkdir ".\portable\Unchecked"
 
-copy ".\run.bat" ".\portable\Unchecked\run.bat" >nul
+copy ".\scripts\run.bat" ".\portable\Unchecked\run.bat" >nul
 xcopy /e /i /y ".\dist\Unchecked" ".\portable\Unchecked" >nul
 
 powershell -NoProfile -Command "Compress-Archive -Path '.\portable\Unchecked\*' -DestinationPath '.\portable\Unchecked-portable.zip' -Force"

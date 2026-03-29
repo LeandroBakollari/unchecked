@@ -1,6 +1,6 @@
 @echo off
 setlocal
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 if exist ".\dist\Unchecked\Unchecked.exe" (
     start "" ".\dist\Unchecked\Unchecked.exe"
