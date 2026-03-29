@@ -14,18 +14,22 @@ class ShotgunAttack(AttackBase):
 
     def __init__(self, pen_rect, player_rect, assets):
         super().__init__(pen_rect, player_rect, assets)
-        self.gun_img_raw = assets["shotgun_img"]
+        # The source shotgun art points left, so we flip it once to create a right-facing base for rotation.
+        self.gun_img_raw = pygame.transform.flip(assets["shotgun_img"], True, False)
         self.projectile_img = assets["bullet_img"]
 
+        # The shotgun remains anchored at the pen's draw position and only uses the initial player location to aim.
         self.origin = pygame.Vector2(pen_rect.center)
         self.base_angle = utils.angle_from_vector(*utils.vector_to(self.origin, player_rect.center)[:2])
 
+        # These values describe the two-wave pellet spread.
         self.cone_width = 140
         self.step = 20
         self.wave1_count = 7
         self.wave2_count = 6
         self.wave2_offset = 10
 
+        # Windup and cleanup keep the sprite on screen long enough to read the attack.
         self.windup = 0.35
         self.wave_gap = 0.35
         self.timer = 0.0
@@ -38,6 +42,7 @@ class ShotgunAttack(AttackBase):
         )
 
     def _spawn_wave(self, start_angle, count, projectiles):
+        """Spawn one spread wave by stepping through the cone angle in fixed increments."""
         for i in range(count):
             ang = start_angle + i * self.step
             rad = math.radians(ang)
@@ -52,6 +57,7 @@ class ShotgunAttack(AttackBase):
             projectiles.append(bullet)
 
     def update(self, dt, projectiles, player):
+        """Fire the two pellet waves on schedule, then mark the attack finished after a short linger."""
         if self.finished:
             return []
 
@@ -73,6 +79,7 @@ class ShotgunAttack(AttackBase):
         return []
 
     def draw(self, surface):
+        """Rotate the corrected base sprite so the muzzle faces the recorded target angle."""
         angle = -self.base_angle
         img = pygame.transform.rotate(self.gun_img, angle)
         rect = img.get_rect(center=self.origin)

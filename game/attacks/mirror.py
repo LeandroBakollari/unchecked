@@ -11,10 +11,9 @@ class MirrorAttack(AttackBase):
 
     def __init__(self, pen_rect, player_rect, assets, draw_delay=1.1):
         super().__init__(pen_rect, player_rect, assets)
-        self.rect = pygame.Rect(0, 0, 60, 60)
-        self.rect.center = pen_rect.center
-        self.color = (80, 160, 220)
-        self.outline = (30, 70, 120)
+        # The mirror is larger than the other props and never rotates.
+        self.image = assets["mirror_img"]
+        self.rect = self.image.get_rect(center=pen_rect.center)
         self.timer = 0.0
         self.draw_delay = draw_delay
         self.spawns_done = 0
@@ -23,6 +22,7 @@ class MirrorAttack(AttackBase):
         self.attack_classes = assets.get("attack_classes", [])
 
     def update(self, dt, projectiles, player):
+        """Spawn delayed mirrored attacks from the mirror's fixed position."""
         if self.finished:
             return []
 
@@ -48,5 +48,5 @@ class MirrorAttack(AttackBase):
         return spawned
 
     def draw(self, surface):
-        pygame.draw.rect(surface, self.color, self.rect)
-        pygame.draw.rect(surface, self.outline, self.rect, 3)
+        """Draw the non-rotating mirror sprite at the original pen location."""
+        surface.blit(self.image, self.rect)

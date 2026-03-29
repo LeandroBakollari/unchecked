@@ -17,6 +17,9 @@ from game.attacks.grenade import GrenadeAttack
 from game.attacks.sword import SwordAttack
 from game.attacks.shotgun import ShotgunAttack
 from game.attacks.mirror import MirrorAttack
+from game.attacks.sniper import SniperAttack
+from game.attacks.boomerang import BoomerangAttack
+from game.attacks.shuriken import ShurikenAttack
 
 pygame.init()
 
@@ -39,6 +42,12 @@ grenade_img = load_scaled(ASSET_PATH + "grenade.png", (42, 42))
 explosion_img = load_scaled(ASSET_PATH + "explosion.png", (160, 160))
 sword_img = load_scaled(ASSET_PATH + "sword.png", (80, 80))
 slash_img = load_scaled(ASSET_PATH + "slash.png", (200, 30))
+shotgun_img = load_scaled(ASSET_PATH + "shotgun.png", (150, 90))
+mirror_img = load_scaled(ASSET_PATH + "mirror.png", (110, 110))
+sniper_img = load_scaled(ASSET_PATH + "sniper.png", (150, 85))
+boomerang_img = load_scaled(ASSET_PATH + "boomerang.png", (95, 95))
+shuriken_img = load_scaled(ASSET_PATH + "shuriken.png", (78, 78))
+shuriken_projectile_img = load_scaled(ASSET_PATH + "shuriken.png", (62, 62))
 
 AttackAssets = {
     "gun_img": gun_img,
@@ -46,13 +55,19 @@ AttackAssets = {
     "grenade_img": grenade_img,
     "explosion_img": explosion_img,
     "sword_img": sword_img,
-    "shotgun_img": slash_img,
+    "slash_img": slash_img,
+    "shotgun_img": shotgun_img,
+    "mirror_img": mirror_img,
+    "sniper_img": sniper_img,
+    "boomerang_img": boomerang_img,
+    "shuriken_img": shuriken_img,
+    "shuriken_projectile_img": shuriken_projectile_img,
 }
 
 # --- ATTACK REGISTRY ---
-ATTACK_TYPES = [GunAttack, GrenadeAttack, SwordAttack, ShotgunAttack, MirrorAttack]
+ATTACK_TYPES = [GunAttack, GrenadeAttack, SwordAttack, ShotgunAttack, MirrorAttack, SniperAttack, BoomerangAttack, ShurikenAttack]
 # mirror should only spawn non-mirror attacks
-AttackAssets["attack_classes"] = [GunAttack, GrenadeAttack, SwordAttack, ShotgunAttack]
+AttackAssets["attack_classes"] = [GunAttack, GrenadeAttack, SwordAttack, ShotgunAttack, SniperAttack, BoomerangAttack, ShurikenAttack]
 
 # --- ENTITIES ---
 player = Player(checkbox_icon, screen_width, screen_height)
