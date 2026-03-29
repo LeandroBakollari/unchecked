@@ -11,9 +11,10 @@ class Pen:
         self.y = float(self.rect.centery)
         self.top_area = top_area
 
-        self.base_speed = 340.0
+        # The pen starts slower and ramps over a full three-minute run before reaching top speed.
+        self.base_speed = 230.0
         self.max_speed = 780.0
-        self.speed_ramp = 38.0  # accelerates over time to spawn more attacks
+        self.time_to_max_speed = 180.0
         self.draw_duration = 0.55  # seconds holding position to "draw"
         self.wait_timer = 0.0
         self.drawing = False
@@ -28,7 +29,8 @@ class Pen:
 
     def update(self, dt):
         self.elapsed += dt
-        speed = min(self.max_speed, self.base_speed + self.speed_ramp * self.elapsed)
+        progress = min(1.0, self.elapsed / self.time_to_max_speed)
+        speed = self.base_speed + (self.max_speed - self.base_speed) * progress
 
         if self.wait_timer > 0:
             self.wait_timer -= dt

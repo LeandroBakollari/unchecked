@@ -113,6 +113,52 @@ def draw_sketched_rect(surface, rect, color=INK, jitter_amount=3, passes=4, widt
         pygame.draw.lines(surface, color, True, pts, width)
 
 
+def draw_panel(surface, rect, fill=(255, 255, 255, 110), border=INK, label=None, label_size=28, center_label=False):
+    """Draw a lightly filled paper card with a sketched border and optional label."""
+    panel = pygame.Surface(rect.size, pygame.SRCALPHA)
+    panel.fill(fill)
+    surface.blit(panel, rect.topleft)
+    draw_sketched_rect(surface, rect, color=border, jitter_amount=3, passes=4, width=2)
+
+    if label:
+        if center_label:
+            draw_hand_text(surface, label, rect.centerx, rect.centery, size=label_size, center=True)
+        else:
+            draw_hand_text(surface, label, rect.x + 18, rect.y + 14, size=label_size)
+
+
+def draw_hand_text(surface, text, x, y, size=28, color=INK, center=False, bold=False):
+    """Render text with small repeated offsets to feel more pen-drawn than perfectly typed."""
+    font = get_font(size, bold=bold)
+    base = font.render(text, True, color)
+    rect = base.get_rect()
+    if center:
+        rect.center = (x, y)
+    else:
+        rect.topleft = (x, y)
+
+    offsets = [(0, 0), (1, 0), (0, 1), (-1, 0)]
+    for dx, dy in offsets:
+        surface.blit(base, rect.move(dx, dy))
+    return rect
+
+
+def format_time_mmss(total_seconds):
+    """Format seconds as MM:SS for the run timer and score tables."""
+    total_seconds = max(0, int(total_seconds))
+    minutes = total_seconds // 60
+    seconds = total_seconds % 60
+    return f"{minutes:02d}:{seconds:02d}"
+
+
+def blur_surface(surface, scale=0.18):
+    """Approximate a blur by scaling down and back up."""
+    width, height = surface.get_size()
+    small_size = (max(1, int(width * scale)), max(1, int(height * scale)))
+    small = pygame.transform.smoothscale(surface, small_size)
+    return pygame.transform.smoothscale(small, (width, height))
+
+
 def draw_paper_background(surface, area_rect, top_area):
     surface.fill(PAPER_BG)
     w, h = surface.get_size()

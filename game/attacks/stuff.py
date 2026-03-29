@@ -30,21 +30,24 @@ class StuffAttack(AttackBase):
         self.sweep_arc = 180.0
         self.current_angle = self.base_angle
 
-        # The rotating fireball ring uses six evenly spaced slots distributed across a 180 degree arc.
+        # The rotating fireball ring uses six evenly spaced slots distributed across a full 360 degree circle.
         self.fireball_count = 6
-        self.arc_span = 180.0
+        self.arc_span = 360.0
         self.rotation_speed = 75.0
         self.fireball_max_radius = 155.0
-        self.fireball_start_radius = 0.0
-        self.fireball_expand_duration = 1.15
+        self.fireball_start_radius = 10.0
+        self.fireball_expand_duration = 2.5
         self.fireball_radius = 0.0
-        self.fireball_hitbox_scale = 0.8
+        self.fireball_hitbox_scale = 0.6
 
-        # The orbit center is locked when the pattern starts and sits halfway between the staff and the targeted player spot.
+        # The orbit center starts at the staff and then moves at constant speed along the locked player-facing line.
         self.pattern_started = False
         self.orbit_center = self.origin
         self.pattern_base_angle = self.base_angle
         self.fireball_start_angle = self.base_angle
+        self.pattern_target_center = pygame.Vector2(player_rect.center)
+        self.pattern_direction = pygame.Vector2(0, 1)
+        self.pattern_move_speed = 0.0
 
         # Damage uses a short per-fireball cooldown so overlapping sprites do not stack every frame.
         self.damage = damage
@@ -58,31 +61,33 @@ class StuffAttack(AttackBase):
         return math.degrees(math.atan2(vector.y, vector.x))
 
     def _start_pattern(self, player):
-        """Lock the player-facing direction and the orbit midpoint when the fireballs begin."""
+        """Lock the player-facing direction and the ring travel speed when the fireballs begin."""
         self.pattern_started = True
         player_pos = pygame.Vector2(player.get_rect().center)
-        self.orbit_center = self.origin.lerp(player_pos, 0.5)
-        self.pattern_base_angle = self._vector_angle(player_pos - self.orbit_center)
-        self.fireball_start_angle = self._vector_angle(self.origin - self.orbit_center)
-        self.fireball_start_radius = self.orbit_center.distance_to(self.origin)
+        self.pattern_target_center = player_pos
+        self.orbit_center = pygame.Vector2(self.origin)
+        self.pattern_base_angle = 0.0
+        self.fireball_start_angle = 0.0
         self.fireball_radius = self.fireball_start_radius
-        self.current_angle = self.pattern_base_angle
+        self.current_angle = self._vector_angle(player_pos - self.origin)
+        self.pattern_direction = player_pos - self.origin
+        if self.pattern_direction.length_squared() <= 1e-6:
+            self.pattern_direction = pygame.Vector2(0, 1)
+        self.pattern_move_speed = self.pattern_direction.length() / max(self.pattern_duration, 0.001)
+        self.pattern_direction = self.pattern_direction.normalize()
 
     def _target_fireball_angle(self, index):
-        """Return the final slot angle for one fireball within the player-facing 180 degree arc."""
+        """Return the final slot angle for one fireball within the evenly spaced 360 degree ring."""
         if self.fireball_count == 1:
             base_offset = 0.0
         else:
-            step = self.arc_span / (self.fireball_count - 1)
-            base_offset = -self.arc_span * 0.5 + index * step
+            step = self.arc_span / self.fireball_count
+            base_offset = index * step
         return self.pattern_base_angle + base_offset
 
     def _fireball_angle(self, index, elapsed_pattern):
-        """Unfold each fireball from the staff direction into its slot, then keep rotating from there."""
-        unfold_progress = utils.clamp(elapsed_pattern / self.fireball_expand_duration, 0.0, 1.0)
-        target_angle = self._target_fireball_angle(index)
-        unfolded_angle = utils.lerp(self.fireball_start_angle, target_angle, unfold_progress)
-        return unfolded_angle + elapsed_pattern * self.rotation_speed
+        """Rotate each fireball around the moving center while keeping equal spacing in the ring."""
+        return self._target_fireball_angle(index) + elapsed_pattern * self.rotation_speed
 
     def _fireball_position(self, index, elapsed_pattern):
         """Place each fireball on the rotating arc using the shared orbit center and current radius."""
@@ -92,13 +97,13 @@ class StuffAttack(AttackBase):
         return self.orbit_center + offset
 
     def _fireball_image(self, index, elapsed_pattern):
-        """Rotate the fireball so its bottom-right side always points toward the orbit center."""
+        """Rotate the fireball so it points toward the next clockwise fireball around the circle."""
         radial_angle = self._fireball_angle(index, elapsed_pattern)
-        inward_angle = radial_angle + 180.0
+        tangent_angle = radial_angle - 90.0
 
-        # The source art's bottom-right direction is treated as the trailing side that should face the center.
+        # The source art's bottom-right direction is used as the forward-facing side for the tangent direction.
         source_angle = 315.0
-        return pygame.transform.rotate(self.fireball_img_raw, -(inward_angle - source_angle))
+        return pygame.transform.rotate(self.fireball_img_raw, -(tangent_angle - source_angle))
 
     def _update_damage(self, dt, player, elapsed_pattern):
         """Apply contact damage using smaller fireball hitboxes and independent per-fireball cooldowns."""
@@ -132,16 +137,18 @@ class StuffAttack(AttackBase):
                 self._start_pattern(player)
 
             elapsed_pattern = self.timer - self.windup_duration
+            self.orbit_center += self.pattern_direction * self.pattern_move_speed * dt
             expand_progress = utils.clamp(elapsed_pattern / self.fireball_expand_duration, 0.0, 1.0)
             self.fireball_radius = utils.lerp(
                 self.fireball_start_radius,
                 self.fireball_max_radius,
                 expand_progress,
             )
-            self.current_angle = self.pattern_base_angle
+            self.current_angle = self._vector_angle(self.pattern_direction)
             self._update_damage(dt, player, elapsed_pattern)
 
-            if elapsed_pattern >= self.pattern_duration:
+            screen_rect = pygame.display.get_surface().get_rect()
+            if self.orbit_center.y - self.fireball_radius > screen_rect.bottom:
                 self.finished = True
 
         # The staff image points upward, so subtract 90 degrees from the mathematical facing angle.
