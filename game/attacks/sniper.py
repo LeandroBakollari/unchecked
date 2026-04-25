@@ -176,6 +176,35 @@ class SniperAttack(AttackBase):
 
         pygame.draw.line(surface, (140, 18, 18), start, self.fire_end, beam_width)
 
+    def get_debug_hitboxes(self):
+        if self.finished:
+            return []
+
+        if self.timer < self.aim_duration:
+            return [
+                {
+                    "type": "line",
+                    "start": self._get_muzzle_position(self.current_angle),
+                    "end": self.warning_end,
+                    "width": self.warning_width,
+                    "label": "sniper aim",
+                    "color": (180, 65, 210),
+                }
+            ]
+
+        if self.timer >= self.aim_duration + self.lock_delay:
+            return [
+                {
+                    "type": "line",
+                    "start": self._get_muzzle_position(self.fire_angle),
+                    "end": self.fire_end,
+                    "width": self.fire_width,
+                    "label": "sniper",
+                }
+            ]
+
+        return []
+
     def draw(self, surface):
         """Render the sprite and whichever line phase is currently active."""
         if self.finished:

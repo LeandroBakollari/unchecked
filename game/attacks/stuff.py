@@ -49,10 +49,9 @@ class StuffAttack(AttackBase):
         self.pattern_direction = pygame.Vector2(0, 1)
         self.pattern_move_speed = 0.0
 
-        # Damage uses a short per-fireball cooldown so overlapping sprites do not stack every frame.
+        # Each fireball can hit once; the one that connects is removed while the rest continue orbiting.
         self.damage = damage
-        self.fireball_hit_cooldown = 0.18
-        self.fireball_cooldowns = [0.0 for _ in range(self.fireball_count)]
+        self.fireball_active = [True for _ in range(self.fireball_count)]
 
     def _vector_angle(self, vector):
         """Convert a vector to degrees while handling zero-length vectors safely."""
@@ -105,21 +104,45 @@ class StuffAttack(AttackBase):
         source_angle = 315.0
         return pygame.transform.rotate(self.fireball_img_raw, -(tangent_angle - source_angle))
 
+    def _fireball_rect(self, index, elapsed_pattern):
+        fireball_pos = self._fireball_position(index, elapsed_pattern)
+        return self.fireball_img_raw.get_rect(center=(int(fireball_pos.x), int(fireball_pos.y)))
+
+    def _fireball_hitbox(self, index, elapsed_pattern):
+        fireball_rect = self._fireball_rect(index, elapsed_pattern)
+        return fireball_rect.inflate(
+            -int(fireball_rect.width * (1.0 - self.fireball_hitbox_scale)),
+            -int(fireball_rect.height * (1.0 - self.fireball_hitbox_scale)),
+        )
+
+    def get_debug_hitboxes(self):
+        if not self.pattern_started or self.finished:
+            return []
+
+        elapsed_pattern = self.timer - self.windup_duration
+        hitboxes = []
+        for index in range(self.fireball_count):
+            if not self.fireball_active[index]:
+                continue
+            hitboxes.append(
+                {
+                    "type": "rect",
+                    "rect": self._fireball_hitbox(index, elapsed_pattern),
+                    "label": "fireball",
+                }
+            )
+        return hitboxes
+
     def _update_damage(self, dt, player, elapsed_pattern):
-        """Apply contact damage using smaller fireball hitboxes and independent per-fireball cooldowns."""
+        """Apply contact damage, removing only the fireball that connected."""
         player_hitbox = player.get_hitbox()
         for index in range(self.fireball_count):
-            self.fireball_cooldowns[index] = max(0.0, self.fireball_cooldowns[index] - dt)
-            fireball_pos = self._fireball_position(index, elapsed_pattern)
-            fireball_img = self._fireball_image(index, elapsed_pattern)
-            fireball_rect = fireball_img.get_rect(center=(int(fireball_pos.x), int(fireball_pos.y)))
-            collision_rect = fireball_rect.inflate(
-                -fireball_rect.width * (1.0 - self.fireball_hitbox_scale),
-                -fireball_rect.height * (1.0 - self.fireball_hitbox_scale),
-            )
-            if collision_rect.colliderect(player_hitbox) and self.fireball_cooldowns[index] <= 0.0:
+            if not self.fireball_active[index]:
+                continue
+
+            if self._fireball_hitbox(index, elapsed_pattern).colliderect(player_hitbox):
                 player.take_damage(self.damage)
-                self.fireball_cooldowns[index] = self.fireball_hit_cooldown
+                self.fireball_active[index] = False
 
     def update(self, dt, projectiles, player):
         """Sweep the staff first, then lock into the rotating expanding fireball pattern."""
@@ -168,6 +191,8 @@ class StuffAttack(AttackBase):
 
         elapsed_pattern = self.timer - self.windup_duration
         for index in range(self.fireball_count):
+            if not self.fireball_active[index]:
+                continue
             fireball_pos = self._fireball_position(index, elapsed_pattern)
             fireball_img = self._fireball_image(index, elapsed_pattern)
             fireball_rect = fireball_img.get_rect(center=(int(fireball_pos.x), int(fireball_pos.y)))

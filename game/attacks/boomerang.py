@@ -19,11 +19,10 @@ class BoomerangAttack(AttackBase):
         self.image = self.base_image
         self.rect = self.image.get_rect(center=self.position)
 
-        # Damage is applied on contact with a short cooldown so one overlap does not delete the whole health bar.
+        # Damage is applied once on contact, then the boomerang is removed.
         self.damage = damage
-        self.damage_cooldown = 0.2
-        self.damage_timer = 0.0
-        self.hitbox_scale = 0.6
+        self.hitbox_width = max(34, int(self.base_image.get_width() * 0.56))
+        self.hitbox_height = max(14, int(self.base_image.get_height() * 0.24))
 
         # The boomerang waits in place first so the player can read the spawn.
         self.idle_duration = 1.0
@@ -94,13 +93,27 @@ class BoomerangAttack(AttackBase):
         new_angle = current_angle + applied_delta
         return self._vector_from_angle(new_angle)
 
+    def get_hitbox(self):
+        """Use a smaller horizontal rectangle instead of the sprite's rotating square bounds."""
+        if not self.visible or self.finished:
+            return None
+        rect = pygame.Rect(0, 0, self.hitbox_width, self.hitbox_height)
+        rect.center = (int(self.position.x), int(self.position.y))
+        return rect
+
+    def get_debug_hitboxes(self):
+        hitbox = self.get_hitbox()
+        if hitbox is None:
+            return []
+        return [{"type": "rect", "rect": hitbox, "label": "boomerang"}]
+
     def _update_damage(self, dt, player):
-        """Deal damage on body contact using a small cooldown while the boomerang is visible."""
-        self.damage_timer = max(0.0, self.damage_timer - dt)
-        collision_rect = self.rect.inflate(-self.rect.width * (1.0 - self.hitbox_scale), -self.rect.height * (1.0 - self.hitbox_scale))
-        if self.visible and collision_rect.colliderect(player.get_hitbox()) and self.damage_timer <= 0.0:
+        """Deal damage once on body contact, then remove this boomerang."""
+        hitbox = self.get_hitbox()
+        if hitbox and hitbox.colliderect(player.get_hitbox()):
             player.take_damage(self.damage)
-            self.damage_timer = self.damage_cooldown
+            self.visible = False
+            self.finished = True
 
     def _start_downward_curve(self, player):
         """Switch from the opening straight line to the first limited-curvature chase leg."""

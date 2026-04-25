@@ -20,6 +20,10 @@ class AttackBase:
     def draw(self, surface):
         raise NotImplementedError
 
+    def get_debug_hitboxes(self):
+        """Return debug collision shapes for the current attack state."""
+        return []
+
     @staticmethod
     def angle_to(target_from, target_to):
         dx, dy, _ = utils.vector_to(target_from, target_to)

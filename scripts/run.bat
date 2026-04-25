@@ -1,6 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0.."
+set PYTHONDONTWRITEBYTECODE=1
 
 if exist ".\dist\Unchecked\Unchecked.exe" (
     start "" ".\dist\Unchecked\Unchecked.exe"

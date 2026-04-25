@@ -113,6 +113,24 @@ def draw_sketched_rect(surface, rect, color=INK, jitter_amount=3, passes=4, widt
         pygame.draw.lines(surface, color, True, pts, width)
 
 
+def fit_font_size(text, size, max_width=None, max_height=None, min_size=12, bold=False):
+    """Return the largest font size that keeps text inside the requested bounds."""
+    fitted_size = max(min_size, int(size))
+    if max_width is None and max_height is None:
+        return fitted_size
+
+    while fitted_size > min_size:
+        font = get_font(fitted_size, bold=bold)
+        text_width, text_height = font.size(text)
+        fits_width = max_width is None or text_width <= max_width
+        fits_height = max_height is None or text_height <= max_height
+        if fits_width and fits_height:
+            break
+        fitted_size -= 1
+
+    return fitted_size
+
+
 def draw_panel(surface, rect, fill=(255, 255, 255, 110), border=INK, label=None, label_size=28, center_label=False):
     """Draw a lightly filled paper card with a sketched border and optional label."""
     panel = pygame.Surface(rect.size, pygame.SRCALPHA)
@@ -122,13 +140,35 @@ def draw_panel(surface, rect, fill=(255, 255, 255, 110), border=INK, label=None,
 
     if label:
         if center_label:
-            draw_hand_text(surface, label, rect.centerx, rect.centery, size=label_size, center=True)
+            draw_hand_text(
+                surface,
+                label,
+                rect.centerx,
+                rect.centery,
+                size=label_size,
+                center=True,
+                max_width=rect.width - 16,
+                max_height=rect.height - 12,
+            )
         else:
-            draw_hand_text(surface, label, rect.x + 18, rect.y + 14, size=label_size)
+            draw_hand_text(surface, label, rect.x + 18, rect.y + 14, size=label_size, max_width=rect.width - 28)
 
 
-def draw_hand_text(surface, text, x, y, size=28, color=INK, center=False, bold=False):
+def draw_hand_text(
+    surface,
+    text,
+    x,
+    y,
+    size=28,
+    color=INK,
+    center=False,
+    bold=False,
+    max_width=None,
+    max_height=None,
+    min_size=12,
+):
     """Render text with small repeated offsets to feel more pen-drawn than perfectly typed."""
+    size = fit_font_size(text, size, max_width=max_width, max_height=max_height, min_size=min_size, bold=bold)
     font = get_font(size, bold=bold)
     base = font.render(text, True, color)
     rect = base.get_rect()

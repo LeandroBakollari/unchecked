@@ -21,6 +21,12 @@ class ShurikenProjectile(ProjectileBase):
         self.hitbox_scale = 0.6
         self.rect = self.image.get_rect(center=(x, y))
 
+    def get_hitbox(self):
+        return self.rect.inflate(
+            -int(self.rect.width * (1.0 - self.hitbox_scale)),
+            -int(self.rect.height * (1.0 - self.hitbox_scale)),
+        )
+
     def _normalize_angle(self, angle_deg):
         """Wrap an angle to the -180 to 180 range so turn clamping behaves consistently."""
         return (angle_deg + 180.0) % 360.0 - 180.0
@@ -45,8 +51,7 @@ class ShurikenProjectile(ProjectileBase):
         self.rect = self.image.get_rect(center=(int(self.x), int(self.y)))
 
         hitbox = player.get_hitbox() if hasattr(player, "get_hitbox") else player.rect
-        collision_rect = self.rect.inflate(-self.rect.width * (1.0 - self.hitbox_scale), -self.rect.height * (1.0 - self.hitbox_scale))
-        if collision_rect.colliderect(hitbox):
+        if self.get_hitbox().colliderect(hitbox):
             player.take_damage(self.damage)
             self.active = False
             return

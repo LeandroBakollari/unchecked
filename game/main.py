@@ -1,3 +1,4 @@
+import argparse
 import json
 import os
 import random
@@ -11,6 +12,7 @@ from game.player import Player
 from game.pen import Pen
 from game.utils import (
     blur_surface,
+    clamp,
     draw_hand_text,
     draw_health_bar,
     draw_panel,
@@ -31,12 +33,30 @@ from game.attacks.boomerang import BoomerangAttack
 from game.attacks.shuriken import ShurikenAttack
 from game.attacks.stuff import StuffAttack
 
+
+def parse_runtime_args():
+    parser = argparse.ArgumentParser(description="Unchecked")
+    parser.add_argument("--debug-hitboxes", action="store_true", help="draw gameplay collision hitboxes")
+    parser.add_argument("--windowed", action="store_true", help="start in a resizable window")
+    parser.add_argument("--width", type=int, default=1280, help="window width when --windowed is used")
+    parser.add_argument("--height", type=int, default=850, help="window height when --windowed is used")
+    return parser.parse_known_args()[0]
+
+
+runtime_args = parse_runtime_args()
+
 pygame.init()
 
-screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+windowed_size = (max(720, runtime_args.width), max(520, runtime_args.height))
+fullscreen = not runtime_args.windowed
+debug_hitboxes = runtime_args.debug_hitboxes
+
+if fullscreen:
+    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+else:
+    screen = pygame.display.set_mode(windowed_size, pygame.RESIZABLE)
 pygame.display.set_caption("Unchecked")
 clock = pygame.time.Clock()
-fullscreen = True
 
 screen_width, screen_height, area_rect, top_area = recalc_geometry(screen)
 
@@ -136,25 +156,49 @@ def save_scores(scores):
     SCORES_PATH.write_text(json.dumps(sort_scores(scores)[:20], indent=2), encoding="utf-8")
 
 
+def bounded_int(value, min_value, max_value):
+    """Clamp layout dimensions while tolerating very small windows."""
+    max_value = max(1, int(max_value))
+    min_value = min(int(min_value), max_value)
+    return int(clamp(value, min_value, max_value))
+
+
+def get_ui_scale():
+    """Scale menu controls from the smaller screen dimension so laptop panels stay contained."""
+    return clamp(min(screen_width / 1366, screen_height / 768), 0.72, 1.08)
+
+
 def build_home_layout():
     """Create the stacked menu layout shown in the mockup."""
-    title_rect = pygame.Rect(0, 0, int(screen_width * 0.52), 76)
-    title_rect.center = (screen_width // 2, int(screen_height * 0.14))
+    scale = get_ui_scale()
+    outer_margin = bounded_int(screen_width * 0.045, 28, 72)
+    title_width = bounded_int(screen_width * 0.52, 320, screen_width - outer_margin * 2)
+    title_height = bounded_int(76 * scale, 54, 78)
+    title_rect = pygame.Rect(0, 0, title_width, title_height)
+    title_rect.center = (screen_width // 2, bounded_int(screen_height * 0.14, 58, screen_height - 36))
 
-    button_width = int(screen_width * 0.29)
-    button_height = 62
-    button_gap = 12
-    start_y = title_rect.bottom + 60
+    button_width = bounded_int(screen_width * 0.29, 250, min(430, screen_width - outer_margin * 2))
+    button_height = bounded_int(62 * scale, 48, 64)
+    button_gap = bounded_int(12 * scale, 8, 14)
+    square_size = bounded_int(96 * scale, 58, 96)
+    lower_gap = bounded_int(22 * scale, 12, 22)
+    icon_gap = bounded_int(12 * scale, 8, 12)
+
+    stack_height = button_height * 3 + button_gap * 2 + icon_gap + square_size
+    preferred_start_y = title_rect.bottom + bounded_int(54 * scale, 18, 60)
+    max_bottom = screen_height - bounded_int(26 * scale, 18, 34)
+    start_y = min(preferred_start_y, max_bottom - stack_height)
+    start_y = max(title_rect.bottom + bounded_int(12 * scale, 8, 18), start_y)
 
     play_rect = pygame.Rect(0, start_y, button_width, button_height)
     play_rect.centerx = screen_width // 2
     characters_rect = pygame.Rect(play_rect.x, play_rect.bottom + button_gap, button_width, button_height)
     scoreboard_rect = pygame.Rect(play_rect.x, characters_rect.bottom + button_gap, button_width, button_height)
 
-    square_size = 96
-    lower_gap = 22
-    settings_rect = pygame.Rect(play_rect.centerx + lower_gap // 2, scoreboard_rect.bottom + 12, square_size, square_size)
-    audio_rect = pygame.Rect(settings_rect.x - square_size - lower_gap, settings_rect.y, square_size, square_size)
+    pair_width = square_size * 2 + lower_gap
+    icon_y = scoreboard_rect.bottom + icon_gap
+    audio_rect = pygame.Rect((screen_width - pair_width) // 2, icon_y, square_size, square_size)
+    settings_rect = pygame.Rect(audio_rect.right + lower_gap, icon_y, square_size, square_size)
 
     return {
         "title": title_rect,
@@ -166,22 +210,37 @@ def build_home_layout():
     }
 
 
-def build_home_modal_rect(width_ratio=0.38, height_ratio=0.44):
+def build_home_modal_rect(width_ratio=0.38, height_ratio=0.44, min_width=340, min_height=360):
     """Create a centered pop-up card for home-page subviews."""
-    rect = pygame.Rect(0, 0, int(screen_width * width_ratio), int(screen_height * height_ratio))
+    margin = bounded_int(min(screen_width, screen_height) * 0.055, 24, 56)
+    rect = pygame.Rect(
+        0,
+        0,
+        bounded_int(screen_width * width_ratio, min_width, screen_width - margin * 2),
+        bounded_int(screen_height * height_ratio, min_height, screen_height - margin * 2),
+    )
     rect.center = (screen_width // 2, screen_height // 2 + 18)
     return rect
 
 
 def build_game_over_layout():
     """Create the main overlay and modal rectangles for the end screen."""
-    modal = pygame.Rect(0, 0, int(screen_width * 0.46), int(screen_height * 0.46))
+    scale = get_ui_scale()
+    modal = pygame.Rect(
+        0,
+        0,
+        bounded_int(screen_width * 0.46, 440, screen_width - 72),
+        bounded_int(screen_height * 0.48, 340, screen_height - 72),
+    )
     modal.center = (screen_width // 2, screen_height // 2)
-    button_width = int(modal.width * 0.26)
-    button_height = 62
-    retry_rect = pygame.Rect(modal.left + 38, modal.bottom - 92, button_width, button_height)
-    home_rect = pygame.Rect(retry_rect.right + 18, retry_rect.y, button_width, button_height)
-    save_rect = pygame.Rect(modal.right - button_width - 38, modal.centery + 18, button_width, button_height)
+    gap = bounded_int(18 * scale, 10, 20)
+    margin = bounded_int(modal.width * 0.075, 24, 38)
+    button_height = bounded_int(60 * scale, 46, 62)
+    button_width = max(90, (modal.width - margin * 2 - gap * 2) // 3)
+    button_y = modal.bottom - margin - button_height
+    retry_rect = pygame.Rect(modal.left + margin, button_y, button_width, button_height)
+    home_rect = pygame.Rect(retry_rect.right + gap, button_y, button_width, button_height)
+    save_rect = pygame.Rect(home_rect.right + gap, button_y, button_width, button_height)
     return {
         "modal": modal,
         "retry": retry_rect,
@@ -192,10 +251,19 @@ def build_game_over_layout():
 
 def build_save_modal_layout():
     """Create the name-entry modal shown after choosing save score."""
-    modal = pygame.Rect(0, 0, int(screen_width * 0.32), int(screen_height * 0.23))
+    scale = get_ui_scale()
+    modal = pygame.Rect(
+        0,
+        0,
+        bounded_int(screen_width * 0.34, 320, screen_width - 72),
+        bounded_int(screen_height * 0.25, 210, screen_height - 72),
+    )
     modal.center = (screen_width // 2, int(screen_height * 0.54))
-    input_rect = pygame.Rect(modal.x + 26, modal.y + 78, modal.width - 52, 54)
-    save_rect = pygame.Rect(modal.centerx - 80, modal.bottom - 74, 160, 50)
+    input_height = bounded_int(54 * scale, 44, 54)
+    save_width = min(170, modal.width - 52)
+    save_height = bounded_int(50 * scale, 42, 50)
+    input_rect = pygame.Rect(modal.x + 26, modal.y + bounded_int(78 * scale, 64, 82), modal.width - 52, input_height)
+    save_rect = pygame.Rect(modal.centerx - save_width // 2, modal.bottom - 24 - save_height, save_width, save_height)
     return {"modal": modal, "input": input_rect, "save": save_rect}
 
 
@@ -213,6 +281,22 @@ def create_run_state():
         "score_saved": False,
         "name_input": "",
     }
+
+
+def refresh_screen_layout(new_screen):
+    """Recalculate geometry after toggling fullscreen or resizing the debug window."""
+    global screen, screen_width, screen_height, area_rect, top_area
+    screen = new_screen
+    screen_width, screen_height, area_rect, top_area = recalc_geometry(screen)
+
+    if "run_state" not in globals():
+        return
+
+    run_state["snapshot"] = None
+    run_state["player"].on_resize(screen_width, screen_height)
+    run_state["pen"].top_area = top_area
+    run_state["pen"].rect.clamp_ip(top_area)
+    run_state["pen"].x, run_state["pen"].y = run_state["pen"].rect.center
 
 
 def set_mouse_visibility(mode):
@@ -312,17 +396,29 @@ def draw_game_scene(surface):
     for proj in run_state["projectiles"]:
         proj.draw(surface)
     run_state["player"].draw(surface)
+    if debug_hitboxes:
+        draw_debug_hitboxes(surface)
 
 
 def draw_home(surface):
     """Render the paper-drawn home page with the requested placeholder boxes."""
     layout = build_home_layout()
-    background_a = pygame.Rect(int(screen_width * 0.16), int(screen_height * 0.12), int(screen_width * 0.68), 96)
-    background_b = pygame.Rect(int(screen_width * 0.28), int(screen_height * 0.34), int(screen_width * 0.44), 320)
+    background_a = layout["title"].inflate(48, 24)
+    background_b = layout["play"].union(layout["settings"]).union(layout["audio"]).inflate(44, 36)
     draw_paper_background(surface, background_b, background_a)
 
     draw_panel(surface, layout["title"], fill=(255, 255, 255, 120))
-    draw_hand_text(surface, "Unchecked", layout["title"].centerx, layout["title"].centery, size=58, center=True, bold=True)
+    draw_hand_text(
+        surface,
+        "Unchecked",
+        layout["title"].centerx,
+        layout["title"].centery,
+        size=58,
+        center=True,
+        bold=True,
+        max_width=layout["title"].width - 24,
+        max_height=layout["title"].height - 12,
+    )
 
     button_fill = (180, 180, 180, 180)
     draw_panel(surface, layout["play"], fill=button_fill, center_label=True, label="Play", label_size=42)
@@ -352,7 +448,7 @@ def draw_home(surface):
 
 def draw_characters_modal(surface):
     """Show the list of selectable checkbox skins."""
-    modal = build_home_modal_rect()
+    modal = build_home_modal_rect(min_height=390)
     shade = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
     shade.fill((255, 255, 255, 70))
     surface.blit(shade, (0, 0))
@@ -377,7 +473,7 @@ def draw_characters_modal(surface):
 
 def draw_scoreboard_modal(surface):
     """Show the saved score list in a small centered window."""
-    modal = build_home_modal_rect(width_ratio=0.34, height_ratio=0.48)
+    modal = build_home_modal_rect(width_ratio=0.42, height_ratio=0.58, min_height=420)
     shade = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
     shade.fill((255, 255, 255, 70))
     surface.blit(shade, (0, 0))
@@ -392,7 +488,7 @@ def draw_scoreboard_modal(surface):
     line_y = modal.y + 82
     for index, item in enumerate(top_scores, start=1):
         line = f"{index}. {item.get('name', 'Anon')}"
-        draw_hand_text(surface, line, modal.x + 24, line_y, size=24)
+        draw_hand_text(surface, line, modal.x + 24, line_y, size=24, max_width=modal.width - 170)
         draw_hand_text(surface, format_time_mmss(item.get("time", 0)), modal.right - 130, line_y, size=24)
         line_y += 32
 
@@ -409,13 +505,22 @@ def draw_game_over_overlay(surface):
     surface.blit(overlay, (0, 0))
 
     draw_panel(surface, layout["modal"], fill=(255, 252, 245, 220))
-    draw_hand_text(surface, "Game Over", layout["modal"].centerx, layout["modal"].y + 54, size=50, center=True, bold=True)
+    draw_hand_text(
+        surface,
+        "Game Over",
+        layout["modal"].centerx,
+        layout["modal"].y + 54,
+        size=50,
+        center=True,
+        bold=True,
+        max_width=layout["modal"].width - 56,
+    )
 
     if run_state["result"]["new_high_score"]:
-        draw_hand_text(surface, "New high score", layout["modal"].centerx, layout["modal"].y + 100, size=28, center=True)
+        draw_hand_text(surface, "New high score", layout["modal"].centerx, layout["modal"].y + 100, size=28, center=True, max_width=layout["modal"].width - 56)
 
-    draw_hand_text(surface, f"Time  {format_time_mmss(run_state['result']['time'])}", layout["modal"].x + 36, layout["modal"].y + 144, size=30)
-    draw_hand_text(surface, f"Attacks  {run_state['result']['attacks']}", layout["modal"].x + 36, layout["modal"].y + 184, size=30)
+    draw_hand_text(surface, f"Time  {format_time_mmss(run_state['result']['time'])}", layout["modal"].x + 36, layout["modal"].y + 144, size=30, max_width=layout["modal"].width - 72)
+    draw_hand_text(surface, f"Attacks  {run_state['result']['attacks']}", layout["modal"].x + 36, layout["modal"].y + 184, size=30, max_width=layout["modal"].width - 72)
 
     draw_panel(surface, layout["save"], center_label=True, label="Save score", label_size=24)
     draw_panel(surface, layout["retry"], center_label=True, label="Retry", label_size=28)
@@ -436,6 +541,90 @@ def draw_save_modal(surface):
     entry_color = (35, 34, 30) if run_state["name_input"] else (120, 112, 100)
     draw_hand_text(surface, entry_text, layout["input"].x + 14, layout["input"].y + 12, size=28, color=entry_color)
     draw_panel(surface, layout["save"], center_label=True, label="Save", label_size=26)
+
+
+DEBUG_COLORS = {
+    "player": (35, 170, 95),
+    "pen": (70, 125, 240),
+    "projectile": (225, 70, 55),
+    "attack": (215, 135, 35),
+    "warning": (180, 65, 210),
+}
+
+
+def draw_debug_rect(surface, rect, color, label=None):
+    if rect is None:
+        return
+
+    rect = pygame.Rect(rect)
+    if rect.width <= 0 or rect.height <= 0:
+        return
+
+    fill = pygame.Surface(rect.size, pygame.SRCALPHA)
+    fill.fill((*color, 38))
+    surface.blit(fill, rect.topleft)
+    pygame.draw.rect(surface, color, rect, 2)
+    if label:
+        draw_hand_text(surface, label, rect.left, rect.top - 16, size=16, color=color, max_width=120)
+
+
+def draw_debug_circle(surface, center, radius, color, label=None):
+    radius = int(radius)
+    if radius <= 0:
+        return
+
+    center = (int(center[0]), int(center[1]))
+    fill = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+    pygame.draw.circle(fill, (*color, 30), (radius, radius), radius)
+    surface.blit(fill, (center[0] - radius, center[1] - radius))
+    pygame.draw.circle(surface, color, center, radius, 2)
+    if label:
+        draw_hand_text(surface, label, center[0] - radius, center[1] - radius - 16, size=16, color=color, max_width=140)
+
+
+def draw_debug_line(surface, start, end, width, color, label=None):
+    start = (int(start[0]), int(start[1]))
+    end = (int(end[0]), int(end[1]))
+    width = max(1, int(width))
+    pygame.draw.line(surface, (*color,), start, end, width)
+    pygame.draw.line(surface, (20, 20, 20), start, end, 1)
+    if label:
+        draw_hand_text(surface, label, start[0], start[1] - 16, size=16, color=color, max_width=140)
+
+
+def draw_debug_hitbox_entry(surface, entry, fallback_color):
+    kind = entry.get("type", "rect")
+    color = entry.get("color", fallback_color)
+    label = entry.get("label")
+
+    if kind == "rect":
+        draw_debug_rect(surface, entry.get("rect"), color, label)
+    elif kind == "circle":
+        draw_debug_circle(surface, entry.get("center", (0, 0)), entry.get("radius", 0), color, label)
+    elif kind == "line":
+        draw_debug_line(surface, entry.get("start", (0, 0)), entry.get("end", (0, 0)), entry.get("width", 1), color, label)
+
+
+def draw_debug_hitboxes(surface):
+    """Draw the active gameplay collision shapes for tuning attacks."""
+    player = run_state["player"]
+    draw_debug_rect(surface, player.get_hitbox(), DEBUG_COLORS["player"], "player")
+    draw_debug_rect(surface, run_state["pen"].get_rect(), DEBUG_COLORS["pen"], "pen")
+
+    for attack in run_state["active_attacks"]:
+        if not hasattr(attack, "get_debug_hitboxes"):
+            continue
+        for entry in attack.get_debug_hitboxes():
+            draw_debug_hitbox_entry(surface, entry, DEBUG_COLORS["attack"])
+
+    for projectile in run_state["projectiles"]:
+        if not hasattr(projectile, "get_debug_hitboxes"):
+            continue
+        for entry in projectile.get_debug_hitboxes():
+            draw_debug_hitbox_entry(surface, entry, DEBUG_COLORS["projectile"])
+
+    indicator = pygame.Rect(screen_width - 166, 18, 142, 34)
+    draw_panel(surface, indicator, fill=(255, 252, 245, 170), center_label=True, label="F3 Hitboxes", label_size=18)
 
 
 scores = load_scores()
@@ -474,15 +663,12 @@ while running:
             elif event.key == pygame.K_F11:
                 fullscreen = not fullscreen
                 if fullscreen:
-                    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+                    refresh_screen_layout(pygame.display.set_mode((0, 0), pygame.FULLSCREEN))
                 else:
-                    screen = pygame.display.set_mode((1280, 900))
-                screen_width, screen_height, area_rect, top_area = recalc_geometry(screen)
-                run_state["snapshot"] = None
-                run_state["player"].on_resize(screen_width, screen_height)
-                run_state["pen"].top_area = top_area
-                run_state["pen"].rect.clamp_ip(top_area)
-                run_state["pen"].x, run_state["pen"].y = run_state["pen"].rect.center
+                    refresh_screen_layout(pygame.display.set_mode(windowed_size, pygame.RESIZABLE))
+
+            elif event.key == pygame.K_F3:
+                debug_hitboxes = not debug_hitboxes
 
             elif game_state == "home" and event.key in (pygame.K_RETURN, pygame.K_SPACE):
                 begin_run()
@@ -497,12 +683,16 @@ while running:
             if len(run_state["name_input"]) < 18:
                 run_state["name_input"] += event.text
 
+        elif event.type == pygame.VIDEORESIZE and not fullscreen:
+            windowed_size = (max(720, event.w), max(520, event.h))
+            refresh_screen_layout(pygame.display.set_mode(windowed_size, pygame.RESIZABLE))
+
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mouse_pos = event.pos
             if game_state == "home":
                 home_layout = build_home_layout()
                 if home_modal == "characters":
-                    modal = build_home_modal_rect()
+                    modal = build_home_modal_rect(min_height=390)
                     if not modal.collidepoint(mouse_pos):
                         home_modal = None
                     else:
@@ -517,7 +707,7 @@ while running:
                                 break
                             row_y += row_height + 10
                 elif home_modal == "scoreboard":
-                    modal = build_home_modal_rect(width_ratio=0.34, height_ratio=0.48)
+                    modal = build_home_modal_rect(width_ratio=0.42, height_ratio=0.58, min_height=420)
                     if not modal.collidepoint(mouse_pos):
                         home_modal = None
                 elif home_layout["play"].collidepoint(mouse_pos):

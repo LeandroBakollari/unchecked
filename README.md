@@ -33,6 +33,19 @@ py -m game.main
 
 If `scripts\run.bat` does not find a packaged executable, it falls back to a local Python 3.11 install under `%LocalAppData%\Programs\Python\Python311\`.
 
+### Debug hitbox build
+For tuning collision boxes, run the windowed debug version:
+
+```bat
+scripts\run_debug.bat
+```
+
+You can also toggle hitboxes during any run with `F3`, or start manually with:
+
+```bat
+py -m game.main --windowed --debug-hitboxes
+```
+
 ## Build a Windows package
 Build with PyInstaller from the repository root:
 
@@ -59,6 +72,10 @@ scripts\package_portable.bat
 - Sword: previews slash lines, then lunges along them and briefly stays embedded.
 - Shotgun: fires staggered spreads of fireballs across a cone.
 - Mirror: triggers three random attacks in sequence.
+- Sniper: tracks the player, locks aim, then fires a sustained beam.
+- Boomerang: dives through the play area, leaves the screen, then returns upward.
+- Shuriken: launches homing spinning projectiles after a short charge.
+- Stuff: sweeps a staff and sends a rotating ring of fireballs toward the player.
 
 ## Code map
 - `game/main.py`: main loop, rendering, HUD, and attack registration.

@@ -68,6 +68,18 @@ class GrenadeAttack(AttackBase):
         if math.hypot(dx, dy) <= self.explosion_radius:
             player.take_damage(self.damage)
 
+    def get_debug_hitboxes(self):
+        if self.finished:
+            return []
+        return [
+            {
+                "type": "circle",
+                "center": self.target,
+                "radius": self.explosion_radius,
+                "label": "grenade",
+            }
+        ]
+
     def draw(self, surface):
         if not self.landed:
             radius = int(self.explosion_radius * (0.9 + 0.15 * math.sin(pygame.time.get_ticks() / 200)))

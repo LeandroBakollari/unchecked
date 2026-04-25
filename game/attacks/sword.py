@@ -109,6 +109,25 @@ class SwordAttack(AttackBase):
 
         return []
 
+    def get_debug_hitboxes(self):
+        if self.finished or self.sword_visible:
+            return []
+
+        hitboxes = []
+        for slash in self.slashes:
+            t = slash["timer"] - slash["preview_offset"]
+            if 0 <= t < self.preview_time + self.strike_time:
+                hitboxes.append(
+                    {
+                        "type": "line",
+                        "start": slash["start"],
+                        "end": slash["end"],
+                        "width": self.preview_thickness,
+                        "label": "slash",
+                    }
+                )
+        return hitboxes
+
     def draw(self, surface):
         if self.finished:
             return
