@@ -62,9 +62,12 @@ scripts\package_portable.bat
 ## How it plays
 - Move with `WASD` or the arrow keys.
 - Stay inside the sketched dodge zone.
+- Use `Character` on the home screen to select a checkbox skin, randomize the skin, or draw named custom characters.
 - The pencil telegraphs an attack, then fires from the spot where it drew it.
 - Attacks remain where they were drawn while the pencil keeps moving.
 - Lose all HP and the run ends. Press `R` to restart.
+
+Custom characters are saved locally in the same user app-data folder as scores, with one PNG per saved character.
 
 ## Current attacks
 - Gun: places a gun at the pencil location and fires a three-shot burst toward the player.
@@ -76,6 +79,7 @@ scripts\package_portable.bat
 - Boomerang: dives through the play area, leaves the screen, then returns upward.
 - Shuriken: launches homing spinning projectiles after a short charge.
 - Stuff: sweeps a staff and sends a rotating ring of fireballs toward the player.
+- Pool: aims a cue at the player, strikes a spinning ball, and lets it bounce three times before leaving the dodge zone.
 
 ## Code map
 - `game/main.py`: main loop, rendering, HUD, and attack registration.

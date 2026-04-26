@@ -80,8 +80,8 @@ def recalc_geometry(screen):
     screen_width, screen_height = screen.get_size()
 
     # Play area (player movement) sits low and centered
-    area_width = int(screen_width * 0.68)
-    area_height = int(screen_height * 0.58)
+    area_width = min(int(screen_width * 0.68), 920)
+    area_height = min(int(screen_height * 0.58), 520)
     area_rect = pygame.Rect(
         (screen_width - area_width) // 2,
         screen_height - area_height - int(screen_height * 0.06),
@@ -90,11 +90,13 @@ def recalc_geometry(screen):
     )
 
     # Pencil drawing lane across the top
+    top_width = min(int(screen_width * 0.84), 1120)
+    top_height = min(int(screen_height * 0.22), 190)
     top_area = pygame.Rect(
-        int(screen_width * 0.08),
+        (screen_width - top_width) // 2,
         int(screen_height * 0.06),
-        int(screen_width * 0.84),
-        int(screen_height * 0.22),
+        top_width,
+        top_height,
     )
     return screen_width, screen_height, area_rect, top_area
 

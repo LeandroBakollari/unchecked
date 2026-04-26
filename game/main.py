@@ -11,6 +11,7 @@ import pygame
 from game.player import Player
 from game.pen import Pen
 from game.utils import (
+    INK,
     blur_surface,
     clamp,
     draw_hand_text,
@@ -32,6 +33,7 @@ from game.attacks.sniper import SniperAttack
 from game.attacks.boomerang import BoomerangAttack
 from game.attacks.shuriken import ShurikenAttack
 from game.attacks.stuff import StuffAttack
+from game.attacks.pool import PoolAttack
 
 
 def parse_runtime_args():
@@ -68,25 +70,66 @@ def get_base_path():
     return Path(__file__).resolve().parent.parent
 
 
-def get_scores_path():
-    """Store scores in the user's local app-data folder instead of inside the project tree."""
+def get_data_dir():
+    """Store user-created data outside the project tree."""
     local_root = os.getenv("LOCALAPPDATA")
     if local_root:
         data_dir = Path(local_root) / "Unchecked"
     else:
         data_dir = Path.home() / ".unchecked"
     data_dir.mkdir(parents=True, exist_ok=True)
-    return data_dir / "scores.json"
+    return data_dir
+
+
+def get_scores_path():
+    """Store scores in the user's local app-data folder instead of inside the project tree."""
+    return DATA_DIR / "scores.json"
+
+
+def get_custom_character_path():
+    """Legacy path used by the first single-custom-character version."""
+    return DATA_DIR / "custom_character.png"
+
+
+def get_custom_characters_dir():
+    """Store named custom character PNGs and their index locally."""
+    custom_dir = DATA_DIR / "characters"
+    custom_dir.mkdir(parents=True, exist_ok=True)
+    return custom_dir
 
 
 BASE_PATH = get_base_path()
+DATA_DIR = get_data_dir()
 ASSET_PATH = BASE_PATH / "game" / "assets" / "images"
 SCORES_PATH = get_scores_path()
+CUSTOM_CHARACTER_PATH = get_custom_character_path()
+CUSTOM_CHARACTERS_DIR = get_custom_characters_dir()
+CUSTOM_CHARACTER_INDEX_PATH = CUSTOM_CHARACTERS_DIR / "characters.json"
+PLAYER_ICON_SIZE = (26, 26)
+CUSTOM_CHARACTER_SIZE = (64, 64)
+CUSTOM_SKIN_PREFIX = "custom:"
+RANDOM_SKIN_NAME = "Random"
+CUSTOM_BRUSH_RADIUS = 3
+MAX_CHARACTER_NAME_LENGTH = 18
+CHARACTER_COLORS = [
+    ("Black", (35, 34, 30)),
+    ("White", (255, 255, 255)),
+    ("Red", (220, 62, 58)),
+    ("Orange", (235, 130, 40)),
+    ("Yellow", (238, 198, 58)),
+    ("Green", (70, 168, 86)),
+    ("Blue", (58, 118, 214)),
+    ("Purple", (139, 86, 196)),
+    ("Pink", (224, 95, 158)),
+    ("Brown", (132, 82, 52)),
+    ("Gray", (120, 120, 120)),
+    ("Cyan", (58, 176, 190)),
+]
 
-checkbox_icon = load_scaled(str(ASSET_PATH / "Checkbox.png"), (26, 26))
-checkbox_icon_1 = load_scaled(str(ASSET_PATH / "Checkbox1.png"), (26, 26))
-checkbox_icon_2 = load_scaled(str(ASSET_PATH / "Checkbox2.png"), (26, 26))
-checkbox_icon_3 = load_scaled(str(ASSET_PATH / "Checkbox3.png"), (26, 26))
+checkbox_icon = load_scaled(str(ASSET_PATH / "Checkbox.png"), PLAYER_ICON_SIZE)
+checkbox_icon_1 = load_scaled(str(ASSET_PATH / "Checkbox1.png"), PLAYER_ICON_SIZE)
+checkbox_icon_2 = load_scaled(str(ASSET_PATH / "Checkbox2.png"), PLAYER_ICON_SIZE)
+checkbox_icon_3 = load_scaled(str(ASSET_PATH / "Checkbox3.png"), PLAYER_ICON_SIZE)
 pen_img = load_scaled(str(ASSET_PATH / "pen.png"), (130, 130))
 gun_img = load_scaled(str(ASSET_PATH / "gun.png"), (110, 110))
 bullet_img = load_scaled(str(ASSET_PATH / "bullet.png"), (20, 20))
@@ -97,6 +140,8 @@ slash_img = load_scaled(str(ASSET_PATH / "slash.png"), (200, 30))
 shotgun_img = load_scaled(str(ASSET_PATH / "shotgun.png"), (150, 90))
 mirror_img = load_scaled(str(ASSET_PATH / "mirror.png"), (110, 110))
 sniper_img = load_scaled(str(ASSET_PATH / "sniper.png"), (150, 85))
+pool_ball_img = load_scaled(str(ASSET_PATH / "poolBall.png"), (42, 42))
+pool_cue_img = load_scaled(str(ASSET_PATH / "poolCue.png"), (124, 124))
 boomerang_img = load_scaled(str(ASSET_PATH / "boomerang.png"), (95, 95))
 shuriken_img = load_scaled(str(ASSET_PATH / "shuriken.png"), (78, 78))
 shuriken_projectile_img = load_scaled(str(ASSET_PATH / "shuriken.png"), (62, 62))
@@ -120,17 +165,226 @@ AttackAssets = {
     "shuriken_projectile_img": shuriken_projectile_img,
     "stuff_img": stuff_img,
     "fireball_img": fireball_img,
+    "pool_ball_img": pool_ball_img,
+    "pool_cue_img": pool_cue_img,
 }
 
-ATTACK_TYPES = [GunAttack, GrenadeAttack, SwordAttack, ShotgunAttack, MirrorAttack, SniperAttack, BoomerangAttack, ShurikenAttack, StuffAttack]
-AttackAssets["attack_classes"] = [GunAttack, GrenadeAttack, SwordAttack, ShotgunAttack, SniperAttack, BoomerangAttack, ShurikenAttack, StuffAttack]
+ATTACK_TYPES = [GunAttack, GrenadeAttack, SwordAttack, ShotgunAttack, MirrorAttack, SniperAttack, BoomerangAttack, ShurikenAttack, StuffAttack, PoolAttack]
+# ATTACK_TYPES = [PoolAttack]
 
-PLAYER_SKINS = {
+AttackAssets["attack_classes"] = [GunAttack, GrenadeAttack, SwordAttack, ShotgunAttack, SniperAttack, BoomerangAttack, ShurikenAttack, StuffAttack, PoolAttack]
+
+
+def create_blank_custom_character():
+    """Create a transparent drawing surface for the custom player skin."""
+    return pygame.Surface(CUSTOM_CHARACTER_SIZE, pygame.SRCALPHA)
+
+
+def custom_skin_key(character_id):
+    return f"{CUSTOM_SKIN_PREFIX}{character_id}"
+
+
+def is_custom_skin_key(skin_key):
+    return isinstance(skin_key, str) and skin_key.startswith(CUSTOM_SKIN_PREFIX)
+
+
+def custom_id_from_skin_key(skin_key):
+    return skin_key[len(CUSTOM_SKIN_PREFIX):]
+
+
+def custom_character_has_ink(surface):
+    """Return true when the custom character has at least one visible pixel."""
+    return pygame.mask.from_surface(surface).count() > 0
+
+
+def sanitize_custom_character_id(name):
+    """Create a filesystem-friendly id from a user-facing character name."""
+    cleaned = []
+    for char in name.lower().strip():
+        if char.isalnum():
+            cleaned.append(char)
+        elif char in (" ", "-", "_"):
+            cleaned.append("_")
+    slug = "".join(cleaned).strip("_")
+    while "__" in slug:
+        slug = slug.replace("__", "_")
+    return slug or "custom"
+
+
+def unique_custom_character_id(name, existing_id=None):
+    """Create a custom character id that does not collide with existing records."""
+    base_id = sanitize_custom_character_id(name)
+    used_ids = {record.get("id") for record in custom_character_records}
+    if existing_id:
+        used_ids.discard(existing_id)
+    character_id = base_id
+    index = 2
+    while character_id in used_ids:
+        character_id = f"{base_id}_{index}"
+        index += 1
+    return character_id
+
+
+def normalize_custom_character_record(item):
+    """Validate a saved custom character record from disk."""
+    if not isinstance(item, dict):
+        return None
+
+    character_id = str(item.get("id", "")).strip()
+    name = str(item.get("name", "")).strip()
+    file_name = str(item.get("file", "")).strip()
+    if not character_id or not name or not file_name:
+        return None
+
+    return {
+        "id": character_id,
+        "name": name[:MAX_CHARACTER_NAME_LENGTH],
+        "file": Path(file_name).name,
+    }
+
+
+def load_custom_character_records():
+    """Load the index of named custom characters."""
+    if not CUSTOM_CHARACTER_INDEX_PATH.exists():
+        return []
+    try:
+        data = json.loads(CUSTOM_CHARACTER_INDEX_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+    if not isinstance(data, list):
+        return []
+
+    records = []
+    seen_ids = set()
+    for item in data:
+        record = normalize_custom_character_record(item)
+        if record is None or record["id"] in seen_ids:
+            continue
+        records.append(record)
+        seen_ids.add(record["id"])
+    return records
+
+
+def save_custom_character_records():
+    """Persist the custom character index."""
+    CUSTOM_CHARACTER_INDEX_PATH.write_text(json.dumps(custom_character_records, indent=2), encoding="utf-8")
+
+
+def load_custom_character_surface_from_path(path):
+    """Load and normalize a custom character PNG."""
+    try:
+        surface = pygame.image.load(str(path)).convert_alpha()
+    except (OSError, pygame.error):
+        return None
+
+    if surface.get_size() != CUSTOM_CHARACTER_SIZE:
+        surface = pygame.transform.smoothscale(surface, CUSTOM_CHARACTER_SIZE)
+    return surface
+
+
+def make_custom_character_icon(surface):
+    """Scale the saved drawing down to the in-game player size."""
+    return pygame.transform.smoothscale(surface, PLAYER_ICON_SIZE)
+
+
+def migrate_legacy_custom_character():
+    """Import the first single custom-character save into the named library."""
+    if custom_character_records or not CUSTOM_CHARACTER_PATH.exists():
+        return
+
+    surface = load_custom_character_surface_from_path(CUSTOM_CHARACTER_PATH)
+    if surface is None or not custom_character_has_ink(surface):
+        return
+
+    character_id = unique_custom_character_id("Custom")
+    file_name = f"{character_id}.png"
+    try:
+        pygame.image.save(surface, str(CUSTOM_CHARACTERS_DIR / file_name))
+    except (OSError, pygame.error):
+        return
+
+    custom_character_records.append({"id": character_id, "name": "Custom", "file": file_name})
+    save_custom_character_records()
+
+
+BUILTIN_PLAYER_SKINS = {
     "Checkbox": checkbox_icon,
     "Checkbox1": checkbox_icon_1,
     "Checkbox2": checkbox_icon_2,
     "Checkbox3": checkbox_icon_3,
 }
+PLAYER_SKINS = BUILTIN_PLAYER_SKINS.copy()
+custom_character_records = load_custom_character_records()
+custom_character_surfaces = {}
+
+
+def rebuild_player_skins():
+    """Refresh selectable player skins from built-ins plus saved custom characters."""
+    global PLAYER_SKINS, custom_character_surfaces, custom_character_records
+    PLAYER_SKINS = BUILTIN_PLAYER_SKINS.copy()
+    custom_character_surfaces = {}
+    valid_records = []
+
+    for record in custom_character_records:
+        surface = load_custom_character_surface_from_path(CUSTOM_CHARACTERS_DIR / record["file"])
+        if surface is None or not custom_character_has_ink(surface):
+            continue
+
+        valid_records.append(record)
+        custom_character_surfaces[record["id"]] = surface
+        PLAYER_SKINS[custom_skin_key(record["id"])] = make_custom_character_icon(surface)
+
+    if len(valid_records) != len(custom_character_records):
+        custom_character_records = valid_records
+        save_custom_character_records()
+
+
+migrate_legacy_custom_character()
+rebuild_player_skins()
+custom_character_draft = create_blank_custom_character()
+custom_character_name_input = ""
+editing_custom_character_id = None
+selected_draw_color = CHARACTER_COLORS[0][1]
+
+
+def get_custom_character_record(character_id):
+    for record in custom_character_records:
+        if record["id"] == character_id:
+            return record
+    return None
+
+
+def get_skin_label(skin_key):
+    if skin_key == RANDOM_SKIN_NAME:
+        return RANDOM_SKIN_NAME
+    if is_custom_skin_key(skin_key):
+        record = get_custom_character_record(custom_id_from_skin_key(skin_key))
+        return record["name"] if record else "Custom"
+    return skin_key
+
+
+def get_selectable_skin_keys():
+    return [RANDOM_SKIN_NAME, *PLAYER_SKINS.keys()]
+
+
+def get_player_icon_for_run():
+    if selected_player_skin == RANDOM_SKIN_NAME:
+        return random.choice(list(PLAYER_SKINS.values()))
+    return PLAYER_SKINS.get(selected_player_skin, checkbox_icon)
+
+
+def select_player_skin(skin_key):
+    """Select a built-in, custom, or random player skin."""
+    global selected_player_skin, selected_player_icon
+    if skin_key == RANDOM_SKIN_NAME:
+        selected_player_skin = RANDOM_SKIN_NAME
+        selected_player_icon = checkbox_icon
+        return True
+    if skin_key not in PLAYER_SKINS:
+        return False
+    selected_player_skin = skin_key
+    selected_player_icon = PLAYER_SKINS[skin_key]
+    return True
 
 
 def sort_scores(scores):
@@ -223,6 +477,109 @@ def build_home_modal_rect(width_ratio=0.38, height_ratio=0.44, min_width=340, mi
     return rect
 
 
+def build_characters_modal_layout():
+    """Create selectable character rows plus custom edit/delete controls."""
+    modal = build_home_modal_rect(width_ratio=0.54, height_ratio=0.72, min_width=470, min_height=520)
+    scale = get_ui_scale()
+    button_height = bounded_int(52 * scale, 42, 54)
+    new_rect = pygame.Rect(modal.x + 22, modal.bottom - 22 - button_height, modal.width - 44, button_height)
+
+    skin_keys = get_selectable_skin_keys()
+    row_top = modal.y + bounded_int(84 * scale, 70, 90)
+    row_gap = bounded_int(8 * scale, 6, 10)
+    row_height = bounded_int(54 * scale, 46, 58)
+    available_height = max(1, new_rect.y - row_top - 16)
+    visible_count = max(1, int((available_height + row_gap) // (row_height + row_gap)))
+    max_scroll = max(0, len(skin_keys) - visible_count)
+    scroll = int(clamp(character_list_scroll, 0, max_scroll))
+
+    edit_width = bounded_int(54 * scale, 48, 58)
+    delete_width = bounded_int(54 * scale, 48, 58)
+    action_height = bounded_int(36 * scale, 30, 38)
+
+    rows = []
+    row_y = row_top
+    for skin_key in skin_keys[scroll: scroll + visible_count]:
+        row_rect = pygame.Rect(modal.x + 22, row_y, modal.width - 44, row_height)
+        edit_rect = None
+        delete_rect = None
+        select_rect = row_rect
+        if is_custom_skin_key(skin_key):
+            delete_rect = pygame.Rect(row_rect.right - delete_width - 10, 0, delete_width, action_height)
+            delete_rect.centery = row_rect.centery
+            edit_rect = pygame.Rect(delete_rect.x - edit_width - 8, 0, edit_width, action_height)
+            edit_rect.centery = row_rect.centery
+            select_rect = pygame.Rect(row_rect.x, row_rect.y, edit_rect.x - row_rect.x - 8, row_rect.height)
+        rows.append(
+            {
+                "skin": skin_key,
+                "rect": row_rect,
+                "select": select_rect,
+                "edit": edit_rect,
+                "delete": delete_rect,
+            }
+        )
+        row_y += row_height + row_gap
+
+    return {
+        "modal": modal,
+        "rows": rows,
+        "new": new_rect,
+        "scroll": scroll,
+        "max_scroll": max_scroll,
+        "total": len(skin_keys),
+        "visible_count": visible_count,
+    }
+
+
+def build_draw_character_layout():
+    """Create the named custom-character drawing surface and controls."""
+    modal = build_home_modal_rect(width_ratio=0.58, height_ratio=0.80, min_width=560, min_height=610)
+    scale = get_ui_scale()
+    button_height = bounded_int(50 * scale, 42, 52)
+    button_gap = bounded_int(12 * scale, 8, 14)
+    button_y = modal.bottom - 24 - button_height
+    button_width = max(86, (modal.width - 44 - button_gap * 2) // 3)
+
+    back_rect = pygame.Rect(modal.x + 22, button_y, button_width, button_height)
+    clear_rect = pygame.Rect(back_rect.right + button_gap, button_y, button_width, button_height)
+    save_rect = pygame.Rect(clear_rect.right + button_gap, button_y, button_width, button_height)
+
+    input_height = bounded_int(48 * scale, 42, 50)
+    input_rect = pygame.Rect(modal.x + 28, modal.y + bounded_int(72 * scale, 62, 80), modal.width - 56, input_height)
+
+    swatch_size = bounded_int(28 * scale, 22, 30)
+    swatch_gap = bounded_int(10 * scale, 7, 10)
+    swatches_per_row = min(6, max(4, (modal.width - 80 + swatch_gap) // (swatch_size + swatch_gap)))
+    swatches = []
+    palette_top = input_rect.bottom + bounded_int(16 * scale, 10, 18)
+    for index, (label, color) in enumerate(CHARACTER_COLORS):
+        row = index // swatches_per_row
+        col = index % swatches_per_row
+        row_count = min(swatches_per_row, len(CHARACTER_COLORS) - row * swatches_per_row)
+        row_width = row_count * swatch_size + (row_count - 1) * swatch_gap
+        swatch_x = modal.centerx - row_width // 2 + col * (swatch_size + swatch_gap)
+        swatch_y = palette_top + row * (swatch_size + swatch_gap)
+        swatches.append({"label": label, "color": color, "rect": pygame.Rect(swatch_x, swatch_y, swatch_size, swatch_size)})
+
+    palette_bottom = max(item["rect"].bottom for item in swatches)
+    canvas_top = palette_bottom + bounded_int(20 * scale, 14, 22)
+    canvas_bottom = button_y - bounded_int(24 * scale, 16, 26)
+    canvas_side = bounded_int(min(modal.width - 92, canvas_bottom - canvas_top), 160, min(330, modal.width - 56))
+    canvas_rect = pygame.Rect(0, canvas_top, canvas_side, canvas_side)
+    canvas_rect.centerx = modal.centerx
+
+    return {
+        "modal": modal,
+        "input": input_rect,
+        "swatches": swatches,
+        "canvas": canvas_rect,
+        "back": back_rect,
+        "clear": clear_rect,
+        "save": save_rect,
+    }
+
+
 def build_game_over_layout():
     """Create the main overlay and modal rectangles for the end screen."""
     scale = get_ui_scale()
@@ -270,7 +627,7 @@ def build_save_modal_layout():
 def create_run_state():
     """Create a fresh run state for gameplay or retry."""
     return {
-        "player": Player(selected_player_icon, screen_width, screen_height),
+        "player": Player(get_player_icon_for_run(), screen_width, screen_height),
         "pen": Pen(pen_img, top_area),
         "active_attacks": [],
         "projectiles": [],
@@ -319,6 +676,137 @@ def return_home(message=""):
     toast_message = message
     toast_timer = 2.2 if message else 0.0
     set_mouse_visibility(game_state)
+
+
+def show_toast(message, duration=2.2):
+    """Show a short home-screen status message."""
+    global toast_message, toast_timer
+    toast_message = message
+    toast_timer = duration if message else 0.0
+
+
+def open_custom_character_editor():
+    """Start a blank custom character drawing."""
+    open_custom_character_record(None)
+
+
+def open_custom_character_record(character_id):
+    """Start editing a blank or saved custom character drawing."""
+    global home_modal, custom_character_draft, custom_character_name_input, editing_custom_character_id
+    global drawing_custom_character, custom_draw_last_point, selected_draw_color
+    editing_custom_character_id = character_id
+    selected_draw_color = CHARACTER_COLORS[0][1]
+    drawing_custom_character = False
+    custom_draw_last_point = None
+
+    record = get_custom_character_record(character_id) if character_id else None
+    if record:
+        custom_character_draft = custom_character_surfaces.get(character_id, create_blank_custom_character()).copy()
+        custom_character_name_input = record["name"]
+    else:
+        custom_character_draft = create_blank_custom_character()
+        custom_character_name_input = ""
+
+    home_modal = "draw_character"
+
+
+def canvas_to_custom_character_point(mouse_pos, canvas_rect):
+    """Map a screen-space mouse point into the saved custom character surface."""
+    local_x = (mouse_pos[0] - canvas_rect.x) / max(1, canvas_rect.width)
+    local_y = (mouse_pos[1] - canvas_rect.y) / max(1, canvas_rect.height)
+    return (
+        int(clamp(local_x * CUSTOM_CHARACTER_SIZE[0], 0, CUSTOM_CHARACTER_SIZE[0] - 1)),
+        int(clamp(local_y * CUSTOM_CHARACTER_SIZE[1], 0, CUSTOM_CHARACTER_SIZE[1] - 1)),
+    )
+
+
+def draw_on_custom_character_draft(mouse_pos, continue_stroke=False):
+    """Draw the selected ink color onto the custom character draft."""
+    global custom_draw_last_point
+    canvas_rect = build_draw_character_layout()["canvas"]
+    if not canvas_rect.collidepoint(mouse_pos):
+        custom_draw_last_point = None
+        return False
+
+    point = canvas_to_custom_character_point(mouse_pos, canvas_rect)
+    if continue_stroke and custom_draw_last_point is not None:
+        pygame.draw.line(custom_character_draft, selected_draw_color, custom_draw_last_point, point, CUSTOM_BRUSH_RADIUS * 2)
+    pygame.draw.circle(custom_character_draft, selected_draw_color, point, CUSTOM_BRUSH_RADIUS)
+    custom_draw_last_point = point
+    return True
+
+
+def clear_custom_character_draft():
+    """Clear the in-progress drawing without deleting the saved PNG."""
+    global custom_draw_last_point
+    custom_character_draft.fill((0, 0, 0, 0))
+    custom_draw_last_point = None
+
+
+def save_custom_character():
+    """Persist the custom character draft and select it for the next run."""
+    global selected_player_skin, selected_player_icon, home_modal
+    global drawing_custom_character, custom_draw_last_point
+    global editing_custom_character_id
+
+    name = custom_character_name_input.strip()
+    if not name:
+        show_toast("Name it")
+        return
+    if not custom_character_has_ink(custom_character_draft):
+        show_toast("Draw first")
+        return
+
+    record = get_custom_character_record(editing_custom_character_id) if editing_custom_character_id else None
+    created_record = False
+    if record is None:
+        character_id = unique_custom_character_id(name)
+        record = {"id": character_id, "name": name[:MAX_CHARACTER_NAME_LENGTH], "file": f"{character_id}.png"}
+        custom_character_records.append(record)
+        created_record = True
+    else:
+        character_id = record["id"]
+        record["name"] = name[:MAX_CHARACTER_NAME_LENGTH]
+
+    try:
+        pygame.image.save(custom_character_draft, str(CUSTOM_CHARACTERS_DIR / record["file"]))
+    except (OSError, pygame.error):
+        if created_record:
+            custom_character_records.remove(record)
+        show_toast("Save failed")
+        return
+
+    save_custom_character_records()
+    rebuild_player_skins()
+    selected_player_skin = custom_skin_key(character_id)
+    selected_player_icon = PLAYER_SKINS.get(selected_player_skin, checkbox_icon)
+    editing_custom_character_id = character_id
+    home_modal = "characters"
+    drawing_custom_character = False
+    custom_draw_last_point = None
+    show_toast("Character saved")
+
+
+def delete_custom_character(character_id):
+    """Delete a saved custom character and remove it from the character picker."""
+    global custom_character_records, selected_player_skin, selected_player_icon
+    record = get_custom_character_record(character_id)
+    if record is None:
+        return
+
+    try:
+        (CUSTOM_CHARACTERS_DIR / record["file"]).unlink(missing_ok=True)
+    except OSError:
+        pass
+
+    custom_character_records = [item for item in custom_character_records if item["id"] != character_id]
+    save_custom_character_records()
+    rebuild_player_skins()
+
+    if selected_player_skin == custom_skin_key(character_id):
+        selected_player_skin = "Checkbox"
+        selected_player_icon = PLAYER_SKINS[selected_player_skin]
+    show_toast("Character deleted")
 
 
 def get_best_time(scores):
@@ -437,6 +925,8 @@ def draw_home(surface):
 
     if home_modal == "characters":
         draw_characters_modal(surface)
+    elif home_modal == "draw_character":
+        draw_custom_character_modal(surface)
     elif home_modal == "scoreboard":
         draw_scoreboard_modal(surface)
 
@@ -447,28 +937,98 @@ def draw_home(surface):
 
 
 def draw_characters_modal(surface):
-    """Show the list of selectable checkbox skins."""
-    modal = build_home_modal_rect(min_height=390)
+    """Show selectable built-in, random, and saved custom skins."""
+    layout = build_characters_modal_layout()
+    modal = layout["modal"]
     shade = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
     shade.fill((255, 255, 255, 70))
     surface.blit(shade, (0, 0))
     draw_panel(surface, modal, fill=(255, 252, 245, 235))
     draw_hand_text(surface, "Characters", modal.centerx, modal.y + 34, size=36, center=True, bold=True)
 
-    row_y = modal.y + 88
-    row_height = 66
-    for skin_name, skin_image in PLAYER_SKINS.items():
-        row_rect = pygame.Rect(modal.x + 22, row_y, modal.width - 44, row_height)
+    for row in layout["rows"]:
+        skin_key = row["skin"]
+        row_rect = row["rect"]
         draw_panel(surface, row_rect, fill=(255, 255, 255, 120))
-        preview = pygame.transform.scale(skin_image, (36, 36))
-        surface.blit(preview, preview.get_rect(center=(row_rect.x + 34, row_rect.centery)))
-        draw_hand_text(surface, skin_name, row_rect.x + 68, row_rect.y + 18, size=26)
+        preview_size = min(36, row_rect.height - 10)
+        preview_rect = pygame.Rect(0, 0, preview_size, preview_size)
+        preview_rect.center = (row_rect.x + 34, row_rect.centery)
+        if skin_key == RANDOM_SKIN_NAME:
+            pygame.draw.rect(surface, (255, 255, 255), preview_rect, border_radius=4)
+            pygame.draw.rect(surface, INK, preview_rect, 2, border_radius=4)
+            draw_hand_text(surface, "?", preview_rect.centerx, preview_rect.centery, size=28, center=True, bold=True)
+        else:
+            preview = pygame.transform.scale(PLAYER_SKINS[skin_key], (preview_size, preview_size))
+            surface.blit(preview, preview_rect)
 
-        radio_center = (row_rect.right - 30, row_rect.centery)
-        pygame.draw.circle(surface, (35, 34, 30), radio_center, 12, 2)
-        if selected_player_skin == skin_name:
-            pygame.draw.circle(surface, (35, 34, 30), radio_center, 6)
-        row_y += row_height + 10
+        text_y = row_rect.y + max(8, (row_rect.height - 28) // 2)
+        text_right = row["edit"].x - 10 if row["edit"] else row_rect.right - 64
+        draw_hand_text(surface, get_skin_label(skin_key), row_rect.x + 68, text_y, size=26, max_width=text_right - row_rect.x - 68)
+
+        if row["edit"]:
+            draw_panel(surface, row["edit"], fill=(245, 245, 238, 170), center_label=True, label="Edit", label_size=18)
+            draw_panel(surface, row["delete"], fill=(255, 232, 226, 185), center_label=True, label="Del", label_size=18)
+        else:
+            radio_center = (row_rect.right - 30, row_rect.centery)
+            pygame.draw.circle(surface, (35, 34, 30), radio_center, 12, 2)
+            if selected_player_skin == skin_key:
+                pygame.draw.circle(surface, (35, 34, 30), radio_center, 6)
+
+        if row["edit"] and selected_player_skin == skin_key:
+            radio_center = (row["edit"].x - 18, row_rect.centery)
+            pygame.draw.circle(surface, (35, 34, 30), radio_center, 10, 2)
+            pygame.draw.circle(surface, (35, 34, 30), radio_center, 5)
+
+    if layout["max_scroll"] > 0:
+        bar = pygame.Rect(modal.right - 18, layout["rows"][0]["rect"].top, 5, layout["rows"][-1]["rect"].bottom - layout["rows"][0]["rect"].top)
+        pygame.draw.rect(surface, (205, 200, 190), bar, border_radius=2)
+        thumb_height = max(18, int(bar.height * layout["visible_count"] / layout["total"]))
+        thumb_y = bar.y + int((bar.height - thumb_height) * (layout["scroll"] / layout["max_scroll"]))
+        pygame.draw.rect(surface, INK, pygame.Rect(bar.x, thumb_y, bar.width, thumb_height), border_radius=2)
+
+    draw_panel(surface, layout["new"], fill=(235, 235, 225, 180), center_label=True, label="New custom", label_size=26)
+
+
+def draw_custom_character_modal(surface):
+    """Show the named local character drawing modal."""
+    layout = build_draw_character_layout()
+    modal = layout["modal"]
+    canvas_rect = layout["canvas"]
+    shade = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
+    shade.fill((255, 255, 255, 70))
+    surface.blit(shade, (0, 0))
+    draw_panel(surface, modal, fill=(255, 252, 245, 235))
+    title = "Edit character" if editing_custom_character_id else "New character"
+    draw_hand_text(surface, title, modal.centerx, modal.y + 34, size=36, center=True, bold=True)
+
+    draw_panel(surface, layout["input"], fill=(255, 255, 255, 170))
+    name_text = custom_character_name_input or "Name character"
+    name_color = INK if custom_character_name_input else (120, 112, 100)
+    draw_hand_text(surface, name_text, layout["input"].x + 14, layout["input"].y + 11, size=28, color=name_color, max_width=layout["input"].width - 28)
+
+    for item in layout["swatches"]:
+        swatch_rect = item["rect"]
+        pygame.draw.rect(surface, item["color"], swatch_rect, border_radius=4)
+        border_color = INK if item["color"] == selected_draw_color else (120, 112, 100)
+        border_width = 4 if item["color"] == selected_draw_color else 2
+        pygame.draw.rect(surface, border_color, swatch_rect, border_width, border_radius=4)
+
+    draw_panel(surface, canvas_rect.inflate(12, 12), fill=(255, 255, 255, 150))
+    pygame.draw.rect(surface, (255, 255, 255), canvas_rect)
+    grid_color = (226, 226, 218)
+    grid_step = max(12, canvas_rect.width // 8)
+    for x in range(canvas_rect.left + grid_step, canvas_rect.right, grid_step):
+        pygame.draw.line(surface, grid_color, (x, canvas_rect.top), (x, canvas_rect.bottom), 1)
+    for y in range(canvas_rect.top + grid_step, canvas_rect.bottom, grid_step):
+        pygame.draw.line(surface, grid_color, (canvas_rect.left, y), (canvas_rect.right, y), 1)
+
+    drawing_preview = pygame.transform.scale(custom_character_draft, canvas_rect.size)
+    surface.blit(drawing_preview, canvas_rect.topleft)
+    pygame.draw.rect(surface, INK, canvas_rect, 2)
+
+    draw_panel(surface, layout["back"], center_label=True, label="Back", label_size=26)
+    draw_panel(surface, layout["clear"], center_label=True, label="Clear", label_size=26)
+    draw_panel(surface, layout["save"], center_label=True, label="Save", label_size=26)
 
 
 def draw_scoreboard_modal(surface):
@@ -633,6 +1193,9 @@ selected_player_skin = "Checkbox"
 selected_player_icon = PLAYER_SKINS[selected_player_skin]
 audio_muted = False
 home_modal = None
+character_list_scroll = 0
+drawing_custom_character = False
+custom_draw_last_point = None
 run_state = create_run_state()
 toast_message = ""
 toast_timer = 0.0
@@ -655,6 +1218,10 @@ while running:
                 if game_state == "save_score":
                     game_state = "game_over"
                     set_mouse_visibility(game_state)
+                elif game_state == "home" and home_modal == "draw_character":
+                    home_modal = "characters"
+                    drawing_custom_character = False
+                    custom_draw_last_point = None
                 elif game_state == "home" and home_modal is not None:
                     home_modal = None
                 else:
@@ -670,7 +1237,13 @@ while running:
             elif event.key == pygame.K_F3:
                 debug_hitboxes = not debug_hitboxes
 
-            elif game_state == "home" and event.key in (pygame.K_RETURN, pygame.K_SPACE):
+            elif game_state == "home" and home_modal == "draw_character" and event.key == pygame.K_RETURN:
+                save_custom_character()
+
+            elif game_state == "home" and home_modal == "draw_character" and event.key == pygame.K_BACKSPACE:
+                custom_character_name_input = custom_character_name_input[:-1]
+
+            elif game_state == "home" and home_modal is None and event.key in (pygame.K_RETURN, pygame.K_SPACE):
                 begin_run()
 
             elif game_state == "save_score" and event.key == pygame.K_RETURN:
@@ -678,6 +1251,9 @@ while running:
 
             elif game_state == "save_score" and event.key == pygame.K_BACKSPACE:
                 run_state["name_input"] = run_state["name_input"][:-1]
+
+        elif event.type == pygame.TEXTINPUT and game_state == "home" and home_modal == "draw_character":
+            custom_character_name_input = (custom_character_name_input + event.text)[:MAX_CHARACTER_NAME_LENGTH]
 
         elif event.type == pygame.TEXTINPUT and game_state == "save_score":
             if len(run_state["name_input"]) < 18:
@@ -687,25 +1263,68 @@ while running:
             windowed_size = (max(720, event.w), max(520, event.h))
             refresh_screen_layout(pygame.display.set_mode(windowed_size, pygame.RESIZABLE))
 
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            drawing_custom_character = False
+            custom_draw_last_point = None
+
+        elif event.type == pygame.MOUSEMOTION:
+            if game_state == "home" and home_modal == "draw_character" and drawing_custom_character:
+                draw_on_custom_character_draft(event.pos, continue_stroke=True)
+
+        elif event.type == pygame.MOUSEWHEEL:
+            if game_state == "home" and home_modal == "characters":
+                layout = build_characters_modal_layout()
+                character_list_scroll = int(clamp(character_list_scroll - event.y, 0, layout["max_scroll"]))
+
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mouse_pos = event.pos
             if game_state == "home":
                 home_layout = build_home_layout()
-                if home_modal == "characters":
-                    modal = build_home_modal_rect(min_height=390)
+                if home_modal == "draw_character":
+                    draw_layout = build_draw_character_layout()
+                    if not draw_layout["modal"].collidepoint(mouse_pos):
+                        home_modal = "characters"
+                        drawing_custom_character = False
+                        custom_draw_last_point = None
+                    elif any(item["rect"].collidepoint(mouse_pos) for item in draw_layout["swatches"]):
+                        for item in draw_layout["swatches"]:
+                            if item["rect"].collidepoint(mouse_pos):
+                                selected_draw_color = item["color"]
+                                break
+                    elif draw_layout["canvas"].collidepoint(mouse_pos):
+                        drawing_custom_character = True
+                        custom_draw_last_point = None
+                        draw_on_custom_character_draft(mouse_pos)
+                    elif draw_layout["back"].collidepoint(mouse_pos):
+                        home_modal = "characters"
+                        drawing_custom_character = False
+                        custom_draw_last_point = None
+                    elif draw_layout["clear"].collidepoint(mouse_pos):
+                        clear_custom_character_draft()
+                    elif draw_layout["save"].collidepoint(mouse_pos):
+                        save_custom_character()
+
+                elif home_modal == "characters":
+                    character_layout = build_characters_modal_layout()
+                    modal = character_layout["modal"]
                     if not modal.collidepoint(mouse_pos):
                         home_modal = None
                     else:
-                        row_y = modal.y + 88
-                        row_height = 66
-                        for skin_name in PLAYER_SKINS:
-                            row_rect = pygame.Rect(modal.x + 22, row_y, modal.width - 44, row_height)
-                            if row_rect.collidepoint(mouse_pos):
-                                selected_player_skin = skin_name
-                                selected_player_icon = PLAYER_SKINS[skin_name]
+                        for row in character_layout["rows"]:
+                            skin_key = row["skin"]
+                            if row["delete"] and row["delete"].collidepoint(mouse_pos):
+                                delete_custom_character(custom_id_from_skin_key(skin_key))
+                                break
+                            if row["edit"] and row["edit"].collidepoint(mouse_pos):
+                                open_custom_character_record(custom_id_from_skin_key(skin_key))
+                                break
+                            if row["select"].collidepoint(mouse_pos):
+                                select_player_skin(skin_key)
                                 home_modal = None
                                 break
-                            row_y += row_height + 10
+                        else:
+                            if character_layout["new"].collidepoint(mouse_pos):
+                                open_custom_character_editor()
                 elif home_modal == "scoreboard":
                     modal = build_home_modal_rect(width_ratio=0.42, height_ratio=0.58, min_height=420)
                     if not modal.collidepoint(mouse_pos):

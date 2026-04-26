@@ -33,6 +33,10 @@ class ShurikenProjectile(ProjectileBase):
 
     def update(self, dt, player):
         """Curve the shuriken slightly toward the player, spin it, and remove it once it leaves the screen."""
+        if pygame.time.get_ticks() - self.spawn_time > self.lifetime:
+            self.active = False
+            return
+
         desired = pygame.Vector2(player.get_rect().centerx - self.x, player.get_rect().centery - self.y)
         if desired.length_squared() > 1e-6:
             desired_angle = math.degrees(math.atan2(desired.y, desired.x))

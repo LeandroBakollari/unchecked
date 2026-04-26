@@ -12,10 +12,10 @@ class Pen:
         self.top_area = top_area
 
         # The pen starts slower and ramps over a full three-minute run before reaching top speed.
-        self.base_speed = 230.0
-        self.max_speed = 780.0
+        self.base_speed = 500.0
+        self.max_speed = 1000.0
         self.time_to_max_speed = 180.0
-        self.draw_duration = 0.55  # seconds holding position to "draw"
+        self.draw_duration = 0.5  # seconds holding position to "draw"
         self.wait_timer = 0.0
         self.drawing = False
         self.ready_flag = False
