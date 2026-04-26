@@ -10,13 +10,6 @@ scores.json
 .venv/
 venv/
 
-# Build outputs
-build/
-dist/
-portable/
-release/
-*.spec.bak
-
 # OS/editor noise
 .DS_Store
 Thumbs.db

@@ -6,19 +6,14 @@ Unchecked is a notebook-paper survival dodge game. You control the checkbox whil
 ```text
 .
 |-- game/                   # Game code and shipped assets
-|-- packaging/pyinstaller/  # PyInstaller build spec
-|-- scripts/                # Windows launcher and packaging helpers
-|-- build/                  # Local build output (generated)
-|-- dist/                   # Packaged executable output (generated)
-`-- portable/               # Portable zip output (generated)
+`-- scripts/                # Windows launch helpers
 ```
 
-The game source stays entirely under `game/`. Build artifacts are kept out of the code layout and are already ignored by Git.
+The game source stays entirely under `game/`.
 
 ## Run the game
 
-### Option 1: run the packaged build
-If `dist/Unchecked/Unchecked.exe` exists, start it with:
+### Option 1: launcher script
 
 ```bat
 scripts\run.bat
@@ -31,9 +26,7 @@ From the repository root:
 py -m game.main
 ```
 
-If `scripts\run.bat` does not find a packaged executable, it falls back to a local Python 3.11 install under `%LocalAppData%\Programs\Python\Python311\`.
-
-### Debug hitbox build
+### Debug hitboxes
 For tuning collision boxes, run the windowed debug version:
 
 ```bat
@@ -44,19 +37,6 @@ You can also toggle hitboxes during any run with `F3`, or start manually with:
 
 ```bat
 py -m game.main --windowed --debug-hitboxes
-```
-
-## Build a Windows package
-Build with PyInstaller from the repository root:
-
-```bat
-py -m PyInstaller packaging\pyinstaller\Unchecked.spec
-```
-
-After the executable is built, create the portable zip with:
-
-```bat
-scripts\package_portable.bat
 ```
 
 ## How it plays
