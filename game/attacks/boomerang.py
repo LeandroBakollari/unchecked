@@ -6,7 +6,7 @@ from game.attacks.base import AttackBase
 
 
 class BoomerangAttack(AttackBase):
-    """A two-pass boomerang that launches, dives off-screen, then returns for one final upward pass."""
+    """A two-pass boomerang that keeps its heading after crossing the player."""
 
     def __init__(self, pen_rect, player_rect, assets, damage=10):
         super().__init__(pen_rect, player_rect, assets)
@@ -32,6 +32,7 @@ class BoomerangAttack(AttackBase):
         self.phase = "idle"
         self.respawn_delay = 1.0
         self.respawn_timer = 0.0
+        self.return_passed_player = False
 
         # Launch speed stays moderate while the spin is visible and readable.
         self.speed = 420.0
@@ -115,16 +116,16 @@ class BoomerangAttack(AttackBase):
             self.visible = False
             self.finished = True
 
-    def _start_downward_curve(self, player):
-        """Switch from the opening straight line to the first limited-curvature chase leg."""
+    def _continue_downward_pass(self, player):
+        """Keep the launch heading after crossing the player and continue off-screen."""
         self.phase = "curve_down"
         self.side_multiplier = -1.0 if player.get_rect().centerx < self.launch_target.x else 1.0
-        self.velocity = self._vector_from_angle(self.downward_base_angle + (self.side_multiplier * self.max_curve_degrees))
 
     def _start_return_pass(self, player, screen_rect):
         """Respawn just below the screen near the side where the first pass disappeared."""
         self.phase = "return_up"
         self.visible = True
+        self.return_passed_player = False
 
         player_rect = player.get_rect()
         respawn_x = player_rect.centerx + (self.side_multiplier * (player_rect.width * 1.8 + self.reentry_side_padding))
@@ -134,7 +135,7 @@ class BoomerangAttack(AttackBase):
         self.rect = self.image.get_rect(center=(int(self.position.x), int(self.position.y)))
 
     def update(self, dt, projectiles, player):
-        """Advance the boomerang through idle, straight launch, downward curve, hidden wait, and return."""
+        """Advance the boomerang through idle, launch, hidden wait, and return."""
         if self.finished:
             return []
 
@@ -155,11 +156,10 @@ class BoomerangAttack(AttackBase):
             self.position += self.velocity * self.speed * dt
 
             if self.position.y >= player.get_rect().centery:
-                self._start_downward_curve(player)
+                self._continue_downward_pass(player)
 
         elif self.phase == "curve_down":
             self.rotation = (self.rotation + self.spin_speed * dt) % 360.0
-            self.velocity = self._steer_toward_player(player, self.downward_base_angle + (self.side_multiplier * self.max_curve_degrees), dt)
             self.position += self.velocity * self.speed * dt
 
             if self.position.y - self.rect.height * 0.5 > screen_rect.height:
@@ -174,8 +174,11 @@ class BoomerangAttack(AttackBase):
 
         elif self.phase == "return_up":
             self.rotation = (self.rotation + self.spin_speed * dt) % 360.0
-            self.velocity = self._steer_toward_player(player, self.upward_base_angle - (self.side_multiplier * self.max_curve_degrees), dt)
+            if not self.return_passed_player:
+                self.velocity = self._steer_toward_player(player, self.upward_base_angle - (self.side_multiplier * self.max_curve_degrees), dt)
             self.position += self.velocity * self.speed * dt
+            if not self.return_passed_player and self.position.y <= player.get_rect().centery:
+                self.return_passed_player = True
 
             if self.position.y + self.rect.height * 0.5 < 0:
                 self.finished = True

@@ -32,6 +32,7 @@ from game.attacks.mirror import MirrorAttack
 from game.attacks.sniper import SniperAttack
 from game.attacks.boomerang import BoomerangAttack
 from game.attacks.shuriken import ShurikenAttack
+from game.attacks.missile_launcher import MissileLauncherAttack
 from game.attacks.stuff import StuffAttack
 from game.attacks.pool import PoolAttack
 
@@ -145,6 +146,8 @@ pool_cue_img = load_scaled(str(ASSET_PATH / "poolCue.png"), (124, 124))
 boomerang_img = load_scaled(str(ASSET_PATH / "boomerang.png"), (95, 95))
 shuriken_img = load_scaled(str(ASSET_PATH / "shuriken.png"), (78, 78))
 shuriken_projectile_img = load_scaled(str(ASSET_PATH / "shuriken.png"), (62, 62))
+missile_launcher_img = load_scaled(str(ASSET_PATH / "MissleLauncher.png"), (120, 80))
+missile_img = load_scaled(str(ASSET_PATH / "Missle.png"), (46, 30))
 stuff_img = load_scaled(str(ASSET_PATH / "stuff.png"), (120, 120))
 fireball_img = load_scaled(str(ASSET_PATH / "fireball.png"), (54, 54))
 audio_icon = load_scaled(str(ASSET_PATH / "audio.png"), (56, 56))
@@ -163,16 +166,20 @@ AttackAssets = {
     "boomerang_img": boomerang_img,
     "shuriken_img": shuriken_img,
     "shuriken_projectile_img": shuriken_projectile_img,
+    "missile_launcher_img": missile_launcher_img,
+    "missile_img": missile_img,
     "stuff_img": stuff_img,
     "fireball_img": fireball_img,
     "pool_ball_img": pool_ball_img,
     "pool_cue_img": pool_cue_img,
 }
 
-ATTACK_TYPES = [GunAttack, GrenadeAttack, SwordAttack, ShotgunAttack, MirrorAttack, SniperAttack, BoomerangAttack, ShurikenAttack, StuffAttack, PoolAttack]
-# ATTACK_TYPES = [PoolAttack]
+ATTACK_TYPES = [GunAttack, GrenadeAttack, SwordAttack, ShotgunAttack, MirrorAttack, 
+               SniperAttack, BoomerangAttack, ShurikenAttack, MissileLauncherAttack, 
+               StuffAttack, PoolAttack]
+#ATTACK_TYPES = [MissileLauncherAttack]
 
-AttackAssets["attack_classes"] = [GunAttack, GrenadeAttack, SwordAttack, ShotgunAttack, SniperAttack, BoomerangAttack, ShurikenAttack, StuffAttack, PoolAttack]
+AttackAssets["attack_classes"] = [GunAttack, GrenadeAttack, SwordAttack, ShotgunAttack, SniperAttack, BoomerangAttack, ShurikenAttack, MissileLauncherAttack, StuffAttack, PoolAttack]
 
 
 def create_blank_custom_character():
@@ -853,8 +860,6 @@ def save_current_score():
 def draw_game_scene(surface):
     """Render the gameplay screen and the left-side run stats."""
     draw_paper_background(surface, area_rect, top_area)
-    draw_hand_text(surface, "Pencil lane", top_area.x, top_area.y - 28, size=24)
-    draw_hand_text(surface, "Dodge zone", area_rect.x, area_rect.y - 28, size=24)
 
     hud_x = max(48, area_rect.left - 180)
     timer_panel = pygame.Rect(hud_x, area_rect.y + 40, 150, 92)

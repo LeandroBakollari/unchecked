@@ -217,7 +217,6 @@ def draw_paper_background(surface, area_rect, top_area):
         overlay.fill((255, 255, 255, alpha))
         surface.blit(overlay, rect.topleft)
 
-    draw_sketched_rect(surface, top_area, color=INK_MUTED, jitter_amount=4, passes=3, width=2)
     draw_sketched_rect(surface, area_rect, color=INK, jitter_amount=4, passes=4, width=3)
 
 
