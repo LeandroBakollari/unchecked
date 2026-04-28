@@ -4,7 +4,15 @@ import pygame
 
 
 class Pen:
-    def __init__(self, image, top_area):
+    def __init__(
+        self,
+        image,
+        top_area,
+        base_speed=400.0,
+        max_speed=2000.0,
+        time_to_max_speed=180.0,
+        draw_duration=0.1,
+    ):
         self.image = image
         self.rect = image.get_rect(center=top_area.center)
         self.x = float(self.rect.centerx)
@@ -12,10 +20,10 @@ class Pen:
         self.top_area = top_area
 
         # The pen starts slower and ramps over a full three-minute run before reaching top speed.
-        self.base_speed = 400.0
-        self.max_speed = 2000.0
-        self.time_to_max_speed = 180.0
-        self.draw_duration = 0.1  # seconds holding position to "draw"
+        self.base_speed = float(base_speed)
+        self.max_speed = float(max_speed)
+        self.time_to_max_speed = max(0.001, float(time_to_max_speed))
+        self.draw_duration = max(0.001, float(draw_duration))
         self.wait_timer = 0.0
         self.drawing = False
         self.ready_flag = False

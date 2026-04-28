@@ -174,12 +174,98 @@ AttackAssets = {
     "pool_cue_img": pool_cue_img,
 }
 
-ATTACK_TYPES = [GunAttack, GrenadeAttack, SwordAttack, ShotgunAttack, MirrorAttack, 
-               SniperAttack, BoomerangAttack, ShurikenAttack, MissileLauncherAttack, 
-               StuffAttack, PoolAttack]
-#ATTACK_TYPES = [MissileLauncherAttack]
+ATTACK_CATALOG = [
+    ("Gun", GunAttack),
+    ("Grenade", GrenadeAttack),
+    ("Sword", SwordAttack),
+    ("Shotgun", ShotgunAttack),
+    ("Mirror", MirrorAttack),
+    ("Sniper", SniperAttack),
+    ("Boomerang", BoomerangAttack),
+    ("Shuriken", ShurikenAttack),
+    ("Missile launcher", MissileLauncherAttack),
+    ("Stuff", StuffAttack),
+    ("Pool", PoolAttack),
+]
+MAX_ATTACK_COUNT = 9
+DEFAULT_PEN_SETTINGS = {
+    "base_speed": 400.0,
+    "max_speed": 2000.0,
+    "time_to_max_speed": 180.0,
+    "draw_duration": 0.1,
+}
+PEN_SETTING_DEFS = [
+    ("base_speed", "Pen speed", 50.0, 50.0, 3000.0),
+    ("max_speed", "Max speed", 100.0, 100.0, 4000.0),
+    ("time_to_max_speed", "Ramp time", 10.0, 1.0, 600.0),
+    ("draw_duration", "Draw time", 0.05, 0.05, 5.0),
+]
+attack_counts = {label: 1 for label, _ in ATTACK_CATALOG}
+pen_settings = DEFAULT_PEN_SETTINGS.copy()
 
-AttackAssets["attack_classes"] = [GunAttack, GrenadeAttack, SwordAttack, ShotgunAttack, SniperAttack, BoomerangAttack, ShurikenAttack, MissileLauncherAttack, StuffAttack, PoolAttack]
+
+def get_selected_attack_pool():
+    pool = []
+    for label, attack_cls in ATTACK_CATALOG:
+        count = int(clamp(attack_counts.get(label, 0), 0, MAX_ATTACK_COUNT))
+        pool.extend([attack_cls] * count)
+    return pool
+
+
+def get_selected_mirror_attack_classes():
+    classes = []
+    for label, attack_cls in ATTACK_CATALOG:
+        if attack_cls is MirrorAttack:
+            continue
+        count = int(clamp(attack_counts.get(label, 0), 0, MAX_ATTACK_COUNT))
+        classes.extend([attack_cls] * count)
+    return classes
+
+
+def refresh_attack_asset_selection():
+    AttackAssets["attack_classes"] = get_selected_mirror_attack_classes()
+
+
+def set_all_attack_counts(count):
+    count = int(clamp(count, 0, MAX_ATTACK_COUNT))
+    for label, _ in ATTACK_CATALOG:
+        attack_counts[label] = count
+
+
+def reset_game_settings():
+    set_all_attack_counts(1)
+    pen_settings.update(DEFAULT_PEN_SETTINGS)
+
+
+def adjust_attack_count(label, delta):
+    attack_counts[label] = int(clamp(attack_counts.get(label, 0) + delta, 0, MAX_ATTACK_COUNT))
+
+
+def toggle_attack_count(label):
+    attack_counts[label] = 0 if attack_counts.get(label, 0) else 1
+
+
+def format_pen_setting(key):
+    value = pen_settings[key]
+    if key == "draw_duration":
+        return f"{value:.2f}s"
+    if key == "time_to_max_speed":
+        return f"{int(round(value))}s"
+    return str(int(round(value)))
+
+
+def adjust_pen_setting(key, direction):
+    setting = next(item for item in PEN_SETTING_DEFS if item[0] == key)
+    _, _, step, min_value, max_value = setting
+    pen_settings[key] = clamp(pen_settings[key] + step * direction, min_value, max_value)
+    if pen_settings["max_speed"] < pen_settings["base_speed"]:
+        if key == "base_speed":
+            pen_settings["max_speed"] = pen_settings["base_speed"]
+        else:
+            pen_settings["base_speed"] = pen_settings["max_speed"]
+
+
+refresh_attack_asset_selection()
 
 
 def create_blank_custom_character():
@@ -445,7 +531,7 @@ def build_home_layout():
     lower_gap = bounded_int(22 * scale, 12, 22)
     icon_gap = bounded_int(12 * scale, 8, 12)
 
-    stack_height = button_height * 3 + button_gap * 2 + icon_gap + square_size
+    stack_height = button_height * 4 + button_gap * 3 + icon_gap + square_size
     preferred_start_y = title_rect.bottom + bounded_int(54 * scale, 18, 60)
     max_bottom = screen_height - bounded_int(26 * scale, 18, 34)
     start_y = min(preferred_start_y, max_bottom - stack_height)
@@ -453,7 +539,8 @@ def build_home_layout():
 
     play_rect = pygame.Rect(0, start_y, button_width, button_height)
     play_rect.centerx = screen_width // 2
-    characters_rect = pygame.Rect(play_rect.x, play_rect.bottom + button_gap, button_width, button_height)
+    game_settings_rect = pygame.Rect(play_rect.x, play_rect.bottom + button_gap, button_width, button_height)
+    characters_rect = pygame.Rect(play_rect.x, game_settings_rect.bottom + button_gap, button_width, button_height)
     scoreboard_rect = pygame.Rect(play_rect.x, characters_rect.bottom + button_gap, button_width, button_height)
 
     pair_width = square_size * 2 + lower_gap
@@ -464,6 +551,7 @@ def build_home_layout():
     return {
         "title": title_rect,
         "play": play_rect,
+        "game_settings": game_settings_rect,
         "characters": characters_rect,
         "scoreboard": scoreboard_rect,
         "audio": audio_rect,
@@ -482,6 +570,88 @@ def build_home_modal_rect(width_ratio=0.38, height_ratio=0.44, min_width=340, mi
     )
     rect.center = (screen_width // 2, screen_height // 2 + 18)
     return rect
+
+
+def build_settings_modal_layout():
+    """Create attack and pen tuning controls for the game settings modal."""
+    modal = build_home_modal_rect(width_ratio=0.76, height_ratio=0.84, min_width=660, min_height=500)
+    scale = get_ui_scale()
+    margin = bounded_int(24 * scale, 16, 26)
+    top_y = modal.y + bounded_int(62 * scale, 52, 66)
+    button_height = bounded_int(38 * scale, 30, 40)
+    button_gap = bounded_int(10 * scale, 6, 10)
+    button_width = max(92, (modal.width - margin * 2 - button_gap * 2) // 3)
+
+    select_all_rect = pygame.Rect(modal.x + margin, top_y, button_width, button_height)
+    deselect_rect = pygame.Rect(select_all_rect.right + button_gap, top_y, button_width, button_height)
+    reset_rect = pygame.Rect(deselect_rect.right + button_gap, top_y, button_width, button_height)
+
+    column_gap = bounded_int(28 * scale, 18, 30)
+    content_top = top_y + button_height + bounded_int(22 * scale, 14, 24)
+    content_bottom = modal.bottom - bounded_int(24 * scale, 16, 26)
+    left_width = int((modal.width - margin * 2 - column_gap) * 0.54)
+    right_width = modal.width - margin * 2 - column_gap - left_width
+    left_x = modal.x + margin
+    right_x = left_x + left_width + column_gap
+
+    row_gap = bounded_int(6 * scale, 4, 6)
+    attack_count = len(ATTACK_CATALOG)
+    available_attack_height = max(1, content_bottom - content_top - row_gap * (attack_count - 1))
+    attack_row_height = bounded_int(available_attack_height // attack_count, 25, 38)
+
+    attack_rows = []
+    row_y = content_top
+    for label, _ in ATTACK_CATALOG:
+        row_rect = pygame.Rect(left_x, row_y, left_width, attack_row_height)
+        stepper_size = min(32, max(24, attack_row_height - 4))
+        plus_rect = pygame.Rect(row_rect.right - stepper_size - 6, 0, stepper_size, stepper_size)
+        plus_rect.centery = row_rect.centery
+        count_rect = pygame.Rect(plus_rect.x - 44, plus_rect.y, 38, stepper_size)
+        minus_rect = pygame.Rect(count_rect.x - stepper_size - 6, plus_rect.y, stepper_size, stepper_size)
+        attack_rows.append(
+            {
+                "label": label,
+                "rect": row_rect,
+                "minus": minus_rect,
+                "plus": plus_rect,
+                "count": count_rect,
+            }
+        )
+        row_y += attack_row_height + row_gap
+
+    pen_header = pygame.Rect(right_x, content_top, right_width, bounded_int(32 * scale, 26, 34))
+    pen_row_gap = bounded_int(12 * scale, 8, 12)
+    pen_row_height = bounded_int(56 * scale, 42, 58)
+    pen_rows = []
+    row_y = pen_header.bottom + bounded_int(12 * scale, 8, 14)
+    for key, label, _, _, _ in PEN_SETTING_DEFS:
+        row_rect = pygame.Rect(right_x, row_y, right_width, pen_row_height)
+        stepper_size = min(36, max(28, pen_row_height - 12))
+        plus_rect = pygame.Rect(row_rect.right - stepper_size - 8, 0, stepper_size, stepper_size)
+        plus_rect.centery = row_rect.centery
+        value_rect = pygame.Rect(plus_rect.x - 76, plus_rect.y, 68, stepper_size)
+        minus_rect = pygame.Rect(value_rect.x - stepper_size - 8, plus_rect.y, stepper_size, stepper_size)
+        pen_rows.append(
+            {
+                "key": key,
+                "label": label,
+                "rect": row_rect,
+                "minus": minus_rect,
+                "plus": plus_rect,
+                "value": value_rect,
+            }
+        )
+        row_y += pen_row_height + pen_row_gap
+
+    return {
+        "modal": modal,
+        "select_all": select_all_rect,
+        "deselect": deselect_rect,
+        "reset": reset_rect,
+        "attack_rows": attack_rows,
+        "pen_header": pen_header,
+        "pen_rows": pen_rows,
+    }
 
 
 def build_characters_modal_layout():
@@ -635,7 +805,14 @@ def create_run_state():
     """Create a fresh run state for gameplay or retry."""
     return {
         "player": Player(get_player_icon_for_run(), screen_width, screen_height),
-        "pen": Pen(pen_img, top_area),
+        "pen": Pen(
+            pen_img,
+            top_area,
+            base_speed=pen_settings["base_speed"],
+            max_speed=pen_settings["max_speed"],
+            time_to_max_speed=pen_settings["time_to_max_speed"],
+            draw_duration=pen_settings["draw_duration"],
+        ),
         "active_attacks": [],
         "projectiles": [],
         "elapsed_time": 0.0,
@@ -671,6 +848,10 @@ def set_mouse_visibility(mode):
 def begin_run():
     """Start a new run from either the menu or retry."""
     global game_state, run_state
+    if not get_selected_attack_pool():
+        show_toast("Select an attack")
+        return
+    refresh_attack_asset_selection()
     run_state = create_run_state()
     game_state = "playing"
     set_mouse_visibility(game_state)
@@ -831,7 +1012,10 @@ def register_attack(attack):
 
 def spawn_attack():
     """Spawn a random attack from the pen's current draw position."""
-    attack_cls = random.choice(ATTACK_TYPES)
+    attack_pool = get_selected_attack_pool()
+    if not attack_pool:
+        return
+    attack_cls = random.choice(attack_pool)
     attack = attack_cls(run_state["pen"].get_rect(), run_state["player"].get_rect(), AttackAssets)
     register_attack(attack)
 
@@ -915,6 +1099,7 @@ def draw_home(surface):
 
     button_fill = (180, 180, 180, 180)
     draw_panel(surface, layout["play"], fill=button_fill, center_label=True, label="Play", label_size=42)
+    draw_panel(surface, layout["game_settings"], fill=button_fill, center_label=True, label="Game settings", label_size=30)
     draw_panel(surface, layout["characters"], fill=button_fill, center_label=True, label="Character", label_size=34)
     draw_panel(surface, layout["scoreboard"], fill=button_fill, center_label=True, label="Score board", label_size=32)
     draw_panel(surface, layout["audio"], fill=button_fill)
@@ -934,11 +1119,78 @@ def draw_home(surface):
         draw_custom_character_modal(surface)
     elif home_modal == "scoreboard":
         draw_scoreboard_modal(surface)
+    elif home_modal == "settings":
+        draw_settings_modal(surface)
 
     if toast_timer > 0.0 and toast_message:
         toast_rect = pygame.Rect(0, 0, 240, 60)
         toast_rect.center = (screen_width // 2, screen_height - 54)
         draw_panel(surface, toast_rect, fill=(255, 248, 220, 185), center_label=True, label=toast_message, label_size=26)
+
+
+def draw_settings_modal(surface):
+    """Show attack pool and pen timing controls."""
+    layout = build_settings_modal_layout()
+    modal = layout["modal"]
+    shade = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
+    shade.fill((255, 255, 255, 70))
+    surface.blit(shade, (0, 0))
+    draw_panel(surface, modal, fill=(255, 252, 245, 235))
+    draw_hand_text(surface, "Game settings", modal.centerx, modal.y + 34, size=36, center=True, bold=True)
+
+    draw_panel(surface, layout["select_all"], fill=(235, 245, 232, 185), center_label=True, label="Select all", label_size=22)
+    draw_panel(surface, layout["deselect"], fill=(255, 232, 226, 185), center_label=True, label="Deselect", label_size=22)
+    draw_panel(surface, layout["reset"], fill=(235, 235, 225, 185), center_label=True, label="Defaults", label_size=22)
+
+    attack_title_y = layout["attack_rows"][0]["rect"].y - 28 if layout["attack_rows"] else modal.y + 98
+    draw_hand_text(surface, "Attacks", layout["attack_rows"][0]["rect"].x, attack_title_y, size=24, bold=True)
+
+    for row in layout["attack_rows"]:
+        count = attack_counts.get(row["label"], 0)
+        fill = (245, 250, 242, 165) if count else (255, 255, 255, 105)
+        draw_panel(surface, row["rect"], fill=fill)
+        box = pygame.Rect(row["rect"].x + 10, 0, min(20, row["rect"].height - 8), min(20, row["rect"].height - 8))
+        box.centery = row["rect"].centery
+        pygame.draw.rect(surface, (255, 255, 255), box, border_radius=3)
+        pygame.draw.rect(surface, INK, box, 2, border_radius=3)
+        if count:
+            inner = box.inflate(-8, -8)
+            pygame.draw.rect(surface, INK, inner, border_radius=2)
+
+        label_x = box.right + 10
+        label_right = row["minus"].x - 8
+        draw_hand_text(
+            surface,
+            row["label"],
+            label_x,
+            row["rect"].y + max(3, (row["rect"].height - 22) // 2),
+            size=22,
+            max_width=label_right - label_x,
+        )
+        draw_panel(surface, row["minus"], fill=(240, 240, 235, 170), center_label=True, label="-", label_size=24)
+        draw_panel(surface, row["count"], fill=(255, 255, 255, 150), center_label=True, label=f"x{count}", label_size=20)
+        draw_panel(surface, row["plus"], fill=(240, 240, 235, 170), center_label=True, label="+", label_size=24)
+
+    draw_hand_text(surface, "Pen", layout["pen_header"].x, layout["pen_header"].y, size=24, bold=True)
+    for row in layout["pen_rows"]:
+        draw_panel(surface, row["rect"], fill=(255, 255, 255, 115))
+        label_x = row["rect"].x + 12
+        label_right = row["minus"].x - 10
+        draw_hand_text(
+            surface,
+            row["label"],
+            label_x,
+            row["rect"].y + 10,
+            size=22,
+            max_width=label_right - label_x,
+        )
+        draw_panel(surface, row["minus"], fill=(240, 240, 235, 170), center_label=True, label="-", label_size=26)
+        draw_panel(surface, row["value"], fill=(255, 255, 255, 150), center_label=True, label=format_pen_setting(row["key"]), label_size=19)
+        draw_panel(surface, row["plus"], fill=(240, 240, 235, 170), center_label=True, label="+", label_size=26)
+
+    selected_total = sum(int(clamp(value, 0, MAX_ATTACK_COUNT)) for value in attack_counts.values())
+    summary = f"{selected_total} attack entries selected"
+    draw_hand_text(surface, summary, modal.centerx, modal.bottom - 18, size=18, center=True, max_width=modal.width - 40)
 
 
 def draw_characters_modal(surface):
@@ -1330,18 +1582,57 @@ while running:
                         else:
                             if character_layout["new"].collidepoint(mouse_pos):
                                 open_custom_character_editor()
+                elif home_modal == "settings":
+                    settings_layout = build_settings_modal_layout()
+                    modal = settings_layout["modal"]
+                    if not modal.collidepoint(mouse_pos):
+                        home_modal = None
+                    elif settings_layout["select_all"].collidepoint(mouse_pos):
+                        set_all_attack_counts(1)
+                    elif settings_layout["deselect"].collidepoint(mouse_pos):
+                        set_all_attack_counts(0)
+                    elif settings_layout["reset"].collidepoint(mouse_pos):
+                        reset_game_settings()
+                    else:
+                        handled_settings_click = False
+                        for row in settings_layout["attack_rows"]:
+                            label = row["label"]
+                            if row["minus"].collidepoint(mouse_pos):
+                                adjust_attack_count(label, -1)
+                                handled_settings_click = True
+                                break
+                            if row["plus"].collidepoint(mouse_pos):
+                                adjust_attack_count(label, 1)
+                                handled_settings_click = True
+                                break
+                            if row["rect"].collidepoint(mouse_pos):
+                                toggle_attack_count(label)
+                                handled_settings_click = True
+                                break
+                        if not handled_settings_click:
+                            for row in settings_layout["pen_rows"]:
+                                if row["minus"].collidepoint(mouse_pos):
+                                    adjust_pen_setting(row["key"], -1)
+                                    break
+                                if row["plus"].collidepoint(mouse_pos):
+                                    adjust_pen_setting(row["key"], 1)
+                                    break
                 elif home_modal == "scoreboard":
                     modal = build_home_modal_rect(width_ratio=0.42, height_ratio=0.58, min_height=420)
                     if not modal.collidepoint(mouse_pos):
                         home_modal = None
                 elif home_layout["play"].collidepoint(mouse_pos):
                     begin_run()
+                elif home_layout["game_settings"].collidepoint(mouse_pos):
+                    home_modal = "settings"
                 elif home_layout["characters"].collidepoint(mouse_pos):
                     home_modal = "characters"
                 elif home_layout["scoreboard"].collidepoint(mouse_pos):
                     home_modal = "scoreboard"
                 elif home_layout["audio"].collidepoint(mouse_pos):
                     audio_muted = not audio_muted
+                elif home_layout["settings"].collidepoint(mouse_pos):
+                    home_modal = "settings"
 
             elif game_state == "game_over":
                 overlay_layout = build_game_over_layout()

@@ -25,6 +25,9 @@ class MirrorAttack(AttackBase):
         """Spawn delayed mirrored attacks from the mirror's fixed position."""
         if self.finished:
             return []
+        if not self.attack_classes:
+            self.finished = True
+            return []
 
         self.timer += dt
         spawned = []
