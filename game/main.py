@@ -35,6 +35,8 @@ from game.attacks.shuriken import ShurikenAttack
 from game.attacks.missile_launcher import MissileLauncherAttack
 from game.attacks.stuff import StuffAttack
 from game.attacks.pool import PoolAttack
+from game.attacks.rain import RainAttack
+from game.attacks.soap import SoapAttack
 
 
 def parse_runtime_args():
@@ -127,6 +129,19 @@ CHARACTER_COLORS = [
     ("Cyan", (58, 176, 190)),
 ]
 
+
+def load_optional_scaled(path, size):
+    """Load optional attack art when present, otherwise let the attack use its procedural fallback."""
+    if not path.exists():
+        return None
+
+    image = pygame.image.load(str(path)).convert_alpha()
+    bounds = image.get_bounding_rect(min_alpha=1)
+    if bounds.width > 0 and bounds.height > 0:
+        image = image.subsurface(bounds).copy()
+    return pygame.transform.smoothscale(image, size)
+
+
 checkbox_icon = load_scaled(str(ASSET_PATH / "Checkbox.png"), PLAYER_ICON_SIZE)
 checkbox_icon_1 = load_scaled(str(ASSET_PATH / "Checkbox1.png"), PLAYER_ICON_SIZE)
 checkbox_icon_2 = load_scaled(str(ASSET_PATH / "Checkbox2.png"), PLAYER_ICON_SIZE)
@@ -150,6 +165,9 @@ missile_launcher_img = load_scaled(str(ASSET_PATH / "MissleLauncher.png"), (120,
 missile_img = load_scaled(str(ASSET_PATH / "Missle.png"), (46, 30))
 stuff_img = load_scaled(str(ASSET_PATH / "stuff.png"), (120, 120))
 fireball_img = load_scaled(str(ASSET_PATH / "fireball.png"), (54, 54))
+cloud_img = load_optional_scaled(ASSET_PATH / "cloud.png", (180, 88))
+raindrop_img = load_optional_scaled(ASSET_PATH / "raindrop.png", (28, 44))
+soap_img = load_optional_scaled(ASSET_PATH / "soap.png", (40, 48))
 audio_icon = load_scaled(str(ASSET_PATH / "audio.png"), (56, 56))
 settings_icon = load_scaled(str(ASSET_PATH / "settings.png"), (56, 56))
 
@@ -172,6 +190,9 @@ AttackAssets = {
     "fireball_img": fireball_img,
     "pool_ball_img": pool_ball_img,
     "pool_cue_img": pool_cue_img,
+    "cloud_img": cloud_img,
+    "raindrop_img": raindrop_img,
+    "soap_img": soap_img,
 }
 
 ATTACK_CATALOG = [
@@ -186,6 +207,8 @@ ATTACK_CATALOG = [
     ("Missile launcher", MissileLauncherAttack),
     ("Stuff", StuffAttack),
     ("Pool", PoolAttack),
+    ("Rain", RainAttack),
+    ("Soap", SoapAttack),
 ]
 MAX_ATTACK_COUNT = 9
 DEFAULT_PEN_SETTINGS = {
