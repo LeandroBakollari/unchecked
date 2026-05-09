@@ -25,6 +25,8 @@ from game.utils import (
 
 from game.attacks.base import AttackBase
 from game.attacks.gun import GunAttack
+from game.attacks.firework_gun import FireworkGunAttack
+from game.attacks.axe import AxeAttack
 from game.attacks.grenade import GrenadeAttack
 from game.attacks.sword import SwordAttack
 from game.attacks.shotgun import ShotgunAttack
@@ -149,6 +151,9 @@ checkbox_icon_3 = load_scaled(str(ASSET_PATH / "Checkbox3.png"), PLAYER_ICON_SIZ
 pen_img = load_scaled(str(ASSET_PATH / "pen.png"), (130, 130))
 gun_img = load_scaled(str(ASSET_PATH / "gun.png"), (110, 110))
 bullet_img = load_scaled(str(ASSET_PATH / "bullet.png"), (20, 20))
+fireworkgun_img = load_optional_scaled(ASSET_PATH / "fireworkgun.png", (128, 94))
+firework_img = load_optional_scaled(ASSET_PATH / "firework.png", (24, 64))
+axe_img = load_scaled(str(ASSET_PATH / "axe.png"), (58, 108))
 grenade_img = load_scaled(str(ASSET_PATH / "grenade.png"), (42, 42))
 explosion_img = load_scaled(str(ASSET_PATH / "explosion.png"), (160, 160))
 sword_img = load_scaled(str(ASSET_PATH / "sword.png"), (80, 80))
@@ -174,6 +179,9 @@ settings_icon = load_scaled(str(ASSET_PATH / "settings.png"), (56, 56))
 AttackAssets = {
     "gun_img": gun_img,
     "bullet_img": bullet_img,
+    "fireworkgun_img": fireworkgun_img,
+    "firework_img": firework_img,
+    "axe_img": axe_img,
     "grenade_img": grenade_img,
     "explosion_img": explosion_img,
     "sword_img": sword_img,
@@ -197,6 +205,8 @@ AttackAssets = {
 
 ATTACK_CATALOG = [
     ("Gun", GunAttack),
+    ("Firework gun", FireworkGunAttack),
+    ("Axe", AxeAttack),
     ("Grenade", GrenadeAttack),
     ("Sword", SwordAttack),
     ("Shotgun", ShotgunAttack),
@@ -611,20 +621,22 @@ def build_settings_modal_layout():
 
     column_gap = bounded_int(28 * scale, 18, 30)
     content_top = top_y + button_height + bounded_int(22 * scale, 14, 24)
-    content_bottom = modal.bottom - bounded_int(24 * scale, 16, 26)
+    content_bottom = modal.bottom - bounded_int(46 * scale, 38, 50)
     left_width = int((modal.width - margin * 2 - column_gap) * 0.54)
     right_width = modal.width - margin * 2 - column_gap - left_width
     left_x = modal.x + margin
     right_x = left_x + left_width + column_gap
 
     row_gap = bounded_int(6 * scale, 4, 6)
-    attack_count = len(ATTACK_CATALOG)
-    available_attack_height = max(1, content_bottom - content_top - row_gap * (attack_count - 1))
-    attack_row_height = bounded_int(available_attack_height // attack_count, 25, 38)
+    attack_row_height = bounded_int(36 * scale, 30, 38)
+    available_attack_height = max(1, content_bottom - content_top)
+    visible_attack_count = max(1, int((available_attack_height + row_gap) // (attack_row_height + row_gap)))
+    max_attack_scroll = max(0, len(ATTACK_CATALOG) - visible_attack_count)
+    attack_scroll = int(clamp(attack_list_scroll, 0, max_attack_scroll))
 
     attack_rows = []
     row_y = content_top
-    for label, _ in ATTACK_CATALOG:
+    for label, _ in ATTACK_CATALOG[attack_scroll: attack_scroll + visible_attack_count]:
         row_rect = pygame.Rect(left_x, row_y, left_width, attack_row_height)
         stepper_size = min(32, max(24, attack_row_height - 4))
         plus_rect = pygame.Rect(row_rect.right - stepper_size - 6, 0, stepper_size, stepper_size)
@@ -672,6 +684,10 @@ def build_settings_modal_layout():
         "deselect": deselect_rect,
         "reset": reset_rect,
         "attack_rows": attack_rows,
+        "attack_scroll": attack_scroll,
+        "attack_max_scroll": max_attack_scroll,
+        "attack_total": len(ATTACK_CATALOG),
+        "attack_visible_count": visible_attack_count,
         "pen_header": pen_header,
         "pen_rows": pen_rows,
     }
@@ -1194,6 +1210,18 @@ def draw_settings_modal(surface):
         draw_panel(surface, row["count"], fill=(255, 255, 255, 150), center_label=True, label=f"x{count}", label_size=20)
         draw_panel(surface, row["plus"], fill=(240, 240, 235, 170), center_label=True, label="+", label_size=24)
 
+    if layout["attack_max_scroll"] > 0 and layout["attack_rows"]:
+        bar = pygame.Rect(
+            layout["attack_rows"][0]["rect"].right + 8,
+            layout["attack_rows"][0]["rect"].top,
+            5,
+            layout["attack_rows"][-1]["rect"].bottom - layout["attack_rows"][0]["rect"].top,
+        )
+        pygame.draw.rect(surface, (205, 200, 190), bar, border_radius=2)
+        thumb_height = max(18, int(bar.height * layout["attack_visible_count"] / layout["attack_total"]))
+        thumb_y = bar.y + int((bar.height - thumb_height) * (layout["attack_scroll"] / layout["attack_max_scroll"]))
+        pygame.draw.rect(surface, INK, pygame.Rect(bar.x, thumb_y, bar.width, thumb_height), border_radius=2)
+
     draw_hand_text(surface, "Pen", layout["pen_header"].x, layout["pen_header"].y, size=24, bold=True)
     for row in layout["pen_rows"]:
         draw_panel(surface, row["rect"], fill=(255, 255, 255, 115))
@@ -1474,6 +1502,7 @@ selected_player_icon = PLAYER_SKINS[selected_player_skin]
 audio_muted = False
 home_modal = None
 character_list_scroll = 0
+attack_list_scroll = 0
 drawing_custom_character = False
 custom_draw_last_point = None
 run_state = create_run_state()
@@ -1555,6 +1584,9 @@ while running:
             if game_state == "home" and home_modal == "characters":
                 layout = build_characters_modal_layout()
                 character_list_scroll = int(clamp(character_list_scroll - event.y, 0, layout["max_scroll"]))
+            elif game_state == "home" and home_modal == "settings":
+                layout = build_settings_modal_layout()
+                attack_list_scroll = int(clamp(attack_list_scroll - event.y, 0, layout["attack_max_scroll"]))
 
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mouse_pos = event.pos

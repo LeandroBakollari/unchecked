@@ -51,6 +51,8 @@ Custom characters are saved locally in the same user app-data folder as scores, 
 
 ## Current attacks
 - Gun: places a gun at the pencil location and fires a three-shot burst toward the player.
+- Firework gun: waits while aiming at the player, then launches three fireworks with the side shots bending outward.
+- Axe: spins briefly at the pencil location, then flies straight toward the player.
 - Grenade: arcs toward the player's recorded position and detonates after a warning pulse.
 - Sword: previews slash lines, then lunges along them and briefly stays embedded.
 - Shotgun: fires staggered spreads of fireballs across a cone.

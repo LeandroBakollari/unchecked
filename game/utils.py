@@ -179,7 +179,7 @@ def draw_hand_text(
     else:
         rect.topleft = (x, y)
 
-    offsets = [(0, 0), (1, 0), (0, 1), (-1, 0)]
+    offsets = [(0, 0), (1, 0)] if bold else [(0, 0)]
     for dx, dy in offsets:
         surface.blit(base, rect.move(dx, dy))
     return rect
